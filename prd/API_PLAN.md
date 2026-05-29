@@ -2,13 +2,65 @@
 
 ## Overview
 
-The Hermes Writer API is a local-first REST API that manages profiles, documents, skills, and content generation. All endpoints are served on `localhost:8000`.
+The Hermes Writer API is a local-first REST API that manages profiles, documents, skills, and content generation. API endpoints are served by FastAPI on `localhost:8000`.
+
+During development the React/Vite frontend runs independently on `localhost:5173`. FastAPI does not serve React during development.
+
+```text
+React/Vite dev server
+http://localhost:5173
+  ↓ HTTP API calls with CORS
+FastAPI backend
+http://localhost:8000
+  ↓ OpenAI-compatible requests
+LiteLLM proxy
+  ↓ provider routing
+Ollama / selected hosted providers
+```
 
 ## Base URL
 
 ```
 http://localhost:8000
 ```
+
+## Canonical Skill Lifecycle
+
+```text
+PENDING -> APPROVED -> ACTIVE -> SUPERSEDED
+Rollback copy-forwards a prior version into a new ROLLED_BACK version.
+```
+
+| Status | Meaning |
+|--------|---------|
+| PENDING | Proposed skill exists but is not user approved |
+| APPROVED | User approved the skill version |
+| ACTIVE | Approved version is currently usable |
+| SUPERSEDED | Version was replaced by a newer active version |
+| ROLLED_BACK | New copy-forward version created from an earlier version |
+
+## Privacy Routing Matrix
+
+| Privacy Mode | API value | Allowed providers | Failure behavior |
+|--------------|-----------|-------------------|------------------|
+| Local Only | `local_only` | Ollama only | Fail closed; no cloud call |
+| Hybrid | `hybrid` | Ollama, then selected hosted providers | Controlled fallback only after user selection |
+| Cloud Allowed | `cloud_allowed` | Selected hosted providers through LiteLLM | Cloud routing permitted |
+
+Cloud-routed requests must not include raw document snippets. They may include approved style rules, abstractions, and summaries.
+
+## Canonical Storage Paths Used By API
+
+| Resource | Path |
+|----------|------|
+| Profile | `data/profiles/{profile_id}/profile.json` |
+| Original document | `data/profiles/{profile_id}/documents/original/{filename}` |
+| Extracted text | `data/profiles/{profile_id}/documents/extracted/{doc_id}.txt` |
+| Document metadata | `data/profiles/{profile_id}/documents/metadata/{doc_id}.json` |
+| Skill | `data/profiles/{profile_id}/skills/{skill_id}/skill.json` |
+| Version | `data/profiles/{profile_id}/skills/{skill_id}/versions/v{N}.skill.json` |
+| Audit log | `data/profiles/{profile_id}/skills/{skill_id}/audit/audit.jsonl` |
+| Outputs | `data/profiles/{profile_id}/skills/{skill_id}/outputs/` |
 
 ## Response Format
 
@@ -106,7 +158,7 @@ GET /api/profiles/{profile_id}
     "created_at": "2026-05-29T10:00:00Z",
     "default_skill": "legal-drafting",
     "skills": [
-      {"skill_id": "legal-drafting", "name": "Legal Drafting", "version": 1, "status": "approved"}
+      {"skill_id": "legal-drafting", "name": "Legal Drafting", "version": 1, "status": "ACTIVE"}
     ],
     "documents": [
       {"doc_id": "doc-001", "filename": "sample.pdf", "uploaded_at": "2026-05-29T10:00:00Z", "status": "extracted"}
@@ -183,7 +235,7 @@ GET /api/profiles/{profile_id}/documents/{doc_id}
     "extracted_text": "...",
     "word_count": 1250,
     "character_count": 8500,
-    "extraction_method": "pypdf"
+    "extraction_method": "pymupdf"
   }
 }
 ```
@@ -281,6 +333,8 @@ GET /api/profiles/{profile_id}/analyze-style/{analysis_id}
         "rule_id": "rule-001",
         "category": "tone",
         "description": "Use professional but approachable tone",
+        "source": "document_derived",
+        "evidence": ["doc-001#snippet-001"],
         "examples": {
           "positive": "We appreciate your business.",
           "negative": "You must comply."
@@ -307,6 +361,8 @@ POST /api/profiles/{profile_id}/analyze-style/{analysis_id}/approve
     {
       "category": "structure",
       "description": "Always include headings",
+      "source": "user_authored",
+      "evidence": null,
       "examples": {
         "positive": "## Section Title",
         "negative": "Section Title (without heading)"
@@ -323,7 +379,7 @@ POST /api/profiles/{profile_id}/analyze-style/{analysis_id}/approve
   "data": {
     "skill_id": "legal-drafting",
     "version": 1,
-    "status": "pending_approval",
+    "status": "PENDING",
     "rules_count": 15
   }
 }
@@ -339,7 +395,7 @@ GET /api/profiles/{profile_id}/skills
 ```
 
 **Query Params:**
-- `status` (optional): `approved`, `pending`, `archived`
+- `status` (optional): `PENDING`, `APPROVED`, `ACTIVE`, `SUPERSEDED`, `ROLLED_BACK`
 
 **Response (200):**
 ```json
@@ -350,7 +406,7 @@ GET /api/profiles/{profile_id}/skills
       "skill_id": "legal-drafting",
       "name": "Legal Drafting",
       "version": 2,
-      "status": "approved",
+      "status": "ACTIVE",
       "rules_count": 15,
       "created_at": "2026-05-29T10:00:00Z",
       "updated_at": "2026-05-29T11:00:00Z"
@@ -372,7 +428,7 @@ GET /api/profiles/{profile_id}/skills/{skill_id}
     "skill_id": "legal-drafting",
     "name": "Legal Drafting",
     "version": 2,
-    "status": "approved",
+    "status": "ACTIVE",
     "rules": [
       {
         "rule_id": "rule-001",
@@ -382,8 +438,8 @@ GET /api/profiles/{profile_id}/skills/{skill_id}
       }
     ],
     "versions": [
-      {"version": 2, "created_at": "2026-05-29T11:00:00Z", "status": "approved"},
-      {"version": 1, "created_at": "2026-05-29T10:00:00Z", "status": "superseded"}
+      {"version": 2, "created_at": "2026-05-29T11:00:00Z", "status": "ACTIVE"},
+      {"version": 1, "created_at": "2026-05-29T10:00:00Z", "status": "SUPERSEDED"}
     ]
   }
 }
@@ -394,7 +450,7 @@ GET /api/profiles/{profile_id}/skills/{skill_id}
 POST /api/profiles/{profile_id}/skills/{skill_id}/approve
 ```
 
-**Response (200):** Updated skill object with status `approved`
+**Response (200):** Updated skill object with status `ACTIVE`
 
 ### Rollback Skill Version
 ```
@@ -409,7 +465,7 @@ POST /api/profiles/{profile_id}/skills/{skill_id}/rollback
 }
 ```
 
-**Response (201):** New skill object (version incremented)
+**Response (201):** New skill object with incremented version, status `ROLLED_BACK`, and `rolled_back_from_version` set to the requested source version.
 
 ### Delete Skill
 ```
@@ -491,7 +547,8 @@ GET /api/profiles/{profile_id}/generations/{generation_id}
     "skill_version": 2,
     "model": "mistral-7b",
     "created_at": "2026-05-29T11:00:00Z",
-    "output_id": "draft-001"
+    "output_id": "draft-001",
+    "output_path": "data/profiles/muhammad/skills/legal-drafting/outputs/draft-001.md"
   }
 }
 ```
@@ -579,7 +636,7 @@ GET /api/config
       {"name": "groq", "available": true},
       {"name": "mistral", "available": false}
     ],
-    "privacy_mode": "ollama_only",
+    "privacy_mode": "local_only",
     "max_upload_size_mb": 50,
     "storage_path": "./data"
   }
@@ -609,6 +666,22 @@ POST /api/config/test-provider
   }
 }
 ```
+
+### Update Privacy Mode
+```
+POST /api/config/update-privacy-mode
+```
+
+**Request Body:**
+```json
+{
+  "privacy_mode": "local_only"
+}
+```
+
+**Valid values:** `local_only`, `hybrid`, `cloud_allowed`
+
+**Response (200):** Updated config. If `local_only` is selected, all LLM operations must be restricted to Ollama and must fail closed when Ollama is unavailable.
 
 ---
 
@@ -666,20 +739,9 @@ GET /api/status
 | `GENERATION_FAILED` | 500 | Content generation failed |
 | `PROVIDER_UNAVAILABLE` | 503 | LLM provider not available |
 | `STORAGE_ERROR` | 500 | File storage error |
-| `UNAUTHORIZED` | 401 | Not authenticated (if auth added later) |
 
 ---
 
 ## Rate Limiting
 
 No rate limiting in Phase 1 (single-user, local-only).
-
-Future phases: Implement rate limiting if multi-user support added.
-
----
-
-## Authentication
-
-No authentication required for Phase 1 (local-only, single-user).
-
-Future phases: Add JWT or session-based auth if needed.

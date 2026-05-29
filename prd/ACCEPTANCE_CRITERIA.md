@@ -5,7 +5,8 @@
 ### AC 1.1: FastAPI Backend Runs Locally
 - [ ] FastAPI server starts without errors on `localhost:8000`
 - [ ] Health check endpoint `GET /health` returns `{"status": "ok"}`
-- [ ] Serves React frontend on `GET /` (proxied or served)
+- [ ] FastAPI does not serve React during development
+- [ ] CORS allows the development frontend origin `http://localhost:5173`
 - [ ] All endpoints return proper JSON responses
 - [ ] Error responses include `error_code` and `message`
 
@@ -26,7 +27,7 @@
 ### AC 1.4: Configuration Management
 - [ ] `.env` file template created (`LiteLLM_API_KEY`, `OLLAMA_BASE_URL`, etc.)
 - [ ] Configuration validated on startup
-- [ ] Startup fails with clear error if required config missing
+- [ ] Startup failure response includes `error_code: "CONFIG_MISSING"` and `recovery_hint` listing each missing required setting
 - [ ] Example config file provided in docs
 
 ### AC 1.5: Git & CI/CD Setup
@@ -57,11 +58,12 @@
 - [ ] Original filename and MIME type preserved in metadata
 
 ### AC 2.3: Document Extraction
-- [ ] PDF extraction produces readable text (using pypdf or similar)
-- [ ] DOCX extraction preserves text structure (python-docx)
+- [ ] PDF extraction uses PyMuPDF and returns non-empty UTF-8 text for valid PDF fixture files
+- [ ] PDF extraction preserves paragraph breaks in PDF fixture files
+- [ ] DOCX extraction returns non-empty UTF-8 text and preserves paragraph breaks in DOCX fixture files
 - [ ] TXT files parsed as-is
 - [ ] Extracted text stored at `data/profiles/{profile_id}/documents/extracted/{doc_id}.txt`
-- [ ] Extraction failures logged; user shown error message
+- [ ] Extraction failure response includes `error_code: "EXTRACTION_FAILED"` and `recovery_hint`
 - [ ] Fallback: user can paste extracted text manually
 
 ### AC 2.4: Text Preview
@@ -72,7 +74,7 @@
 - [ ] Changes saved if user approves
 
 ### AC 2.5: Metadata Storage
-- [ ] Document metadata file: `data/profiles/{profile_id}/documents/{doc_id}/meta.json`
+- [ ] Document metadata file: `data/profiles/{profile_id}/documents/metadata/{doc_id}.json`
 - [ ] Includes: original filename, upload date, extraction date, word count, character count
 - [ ] Audit log entry for each upload
 
@@ -80,34 +82,44 @@
 
 ## Sprint 3: Style Analysis & Rule Extraction
 
-### AC 3.1: Style Analyzer Initialization
-- [ ] Backend loads extracted text documents
-- [ ] Identifies writing patterns (sentence structure, vocabulary, tone, formality)
-- [ ] Uses LLM (via LiteLLM) to generate style rules
-- [ ] Calls trace each rule back to source document snippet
+### AC 3.1: Provider Routing & Privacy Enforcement Gate
+- [ ] Provider routing is configured before any style analysis request can be accepted
+- [ ] Privacy mode is selected and persisted before any style analysis request can be accepted
+- [ ] Local Only routes analysis to Ollama only and fails closed when Ollama is unavailable
+- [ ] Non-Ollama provider calls are rejected in Local Only with `error_code: "LOCAL_ONLY_PROVIDER_BLOCKED"`
+- [ ] Style analysis cannot run until privacy enforcement is active; blocked requests return `error_code: "PRIVACY_ENFORCEMENT_REQUIRED"`
 
-### AC 3.2: Rule Generation
+### AC 3.2: Style Analyzer Initialization
+- [ ] Backend loads extracted text documents
+- [ ] Analyzer request includes the selected privacy mode and resolved provider route
+- [ ] Uses LLM (via LiteLLM) to generate style rules only after privacy enforcement passes
+- [ ] Local Only analysis may include raw extracted text only in prompts routed to Ollama
+- [ ] Hybrid and Cloud Allowed hosted-provider analysis prompts exclude raw source snippets and raw uploaded document text
+
+### AC 3.3: Rule Generation
 - [ ] LLM produces JSON rules with structure:
   - `rule_id`, `category` (tone, structure, vocabulary, etc.)
   - `description`, `examples` (positive + negative)
   - `source_snippets` (list of document excerpts that support rule)
-- [ ] At least 10-20 rules per profile
-- [ ] Rules are actionable (can be checked programmatically or by LLM)
+- [ ] The analyzer returns zero or more rules; every returned document-derived rule includes evidence and confidence
+- [ ] Rules conform to the documented JSON schema
+- [ ] Every document-derived rule has at least one source reference and confidence score between 0 and 1
 
-### AC 3.3: Rule Preview & Approval
+### AC 3.4: Rule Preview & Approval
 - [ ] UI shows each rule with evidence snippets
 - [ ] User can approve, reject, or edit each rule
 - [ ] Rejected rules not included in skill
 - [ ] Edited rules stored with user modification note
 - [ ] Ability to add custom rules manually
+- [ ] Custom rules are stored with `source: "user_authored"` and `evidence: null`
 
-### AC 3.4: Proposed Skill File
+### AC 3.5: Proposed Skill File
 - [ ] System generates `skill.json` with approved rules
 - [ ] Stored at `data/profiles/{profile_id}/skills/{skill_id}/skill.json`
 - [ ] Includes: skill_id, profile_id, name, version, created_at, rules array
 - [ ] Skill is read-only until approved
 
-### AC 3.5: Processing Status
+### AC 3.6: Processing Status
 - [ ] User sees progress indication during style analysis
 - [ ] Estimated time shown if analysis is long
 - [ ] Option to cancel analysis (safe rollback)
@@ -120,14 +132,14 @@
 ### AC 4.1: Skill Approval Workflow
 - [ ] User reviews proposed skill JSON
 - [ ] Option to approve, reject, or iterate
-- [ ] Approved skills moved to `active` state
-- [ ] Status stored in skill.json: `"status": "approved"`
+- [ ] Approved skills move through canonical lifecycle states only: PENDING, APPROVED, ACTIVE, SUPERSEDED, ROLLED_BACK
+- [ ] Status stored in skill.json uses uppercase canonical values
 - [ ] Approval timestamp and approver recorded
 
 ### AC 4.2: Active Skill Registry
 - [ ] UI lists all active skills for profile
 - [ ] Default skill selectable and persisted in profile.json
-- [ ] Inactive skills archived but recoverable
+- [ ] SUPERSEDED skills remain recoverable through rollback
 
 ### AC 4.3: Versioning
 - [ ] Each skill change creates new version: `v1.skill.json`, `v2.skill.json`
@@ -137,11 +149,11 @@
 ### AC 4.4: Rollback
 - [ ] User can rollback to any previous skill version
 - [ ] Rollback is logged in audit log
-- [ ] Current skill version always points to latest approved
-- [ ] Restored version is copied (not reverted in-place)
+- [ ] Rollback copies a selected immutable version into a new immutable version
+- [ ] New rollback version records `status: "ROLLED_BACK"`, `rolled_back_from_version`, `rollback_reason`, and rollback timestamp
 
 ### AC 4.5: Audit Logging
-- [ ] `data/profiles/{profile_id}/skills/{skill_id}/audit.jsonl` created
+- [ ] `data/profiles/{profile_id}/skills/{skill_id}/audit/audit.jsonl` created
 - [ ] Each line is JSON event: `{timestamp, event_type, actor, details}`
 - [ ] Event types: `skill_created`, `rule_approved`, `rule_rejected`, `skill_approved`, `skill_rollback`
 - [ ] Audit log immutable after write
@@ -164,30 +176,30 @@
 ### AC 5.2: Ollama Local Support
 - [ ] Detect local Ollama on startup (http://localhost:11434)
 - [ ] If available, use Ollama as primary provider (privacy-first)
-- [ ] Fallback to cloud provider if Ollama unavailable
+- [ ] If Ollama is unavailable, Local Only fails closed; Hybrid or Cloud Allowed may use permitted hosted providers
 - [ ] User configurable via .env: `OLLAMA_BASE_URL`
 
 ### AC 5.3: Privacy Modes
-- [ ] Mode 1: Ollama-only (no cloud calls)
-- [ ] Mode 2: Ollama + Fallback (tries cloud if local fails)
-- [ ] Mode 3: Cloud-only (explicit opt-in)
+- [ ] Mode 1: Local Only uses Ollama only and fails closed if Ollama is unavailable
+- [ ] Mode 2: Hybrid uses Ollama first and may use controlled hosted fallback only after user selection
+- [ ] Mode 3: Cloud Allowed permits selected cloud providers
 - [ ] User selects mode in UI; persisted in profile
-- [ ] Redact user document content before sending to cloud providers
+- [ ] Raw document snippets are never sent to hosted providers; cloud requests contain only approved style rules, abstractions, summaries, and user prompts
 
 ### AC 5.4: Provider Configuration UI
 - [ ] Settings page shows available providers
-- [ ] User can add API keys for cloud providers (Groq, Mistral, OpenAI, etc.)
+- [ ] User can configure API keys for cloud providers via `.env` (Groq, Mistral, OpenAI, etc.)
 - [ ] Test connection button validates each provider
 - [ ] Configuration stored in `.env` (not in user files)
 
 ### AC 5.5: Provider Fallback
-- [ ] If primary provider fails, attempt fallback
+- [ ] If primary provider fails, fallback is attempted only when the selected privacy mode permits it
 - [ ] Retry logic with exponential backoff (3 attempts max)
 - [ ] User informed of provider switch
 - [ ] Log provider used for each operation
 
 ### AC 5.6: Error Handling
-- [ ] Clear error messages for provider failures
+- [ ] Provider failure responses include exact `error_code`, `message`, and `recovery_hint`
 - [ ] Fallback to local Ollama if cloud provider unavailable
 - [ ] Suggest setup steps if no provider available
 
@@ -200,11 +212,12 @@
 - [ ] Selects active skill from dropdown
 - [ ] Optionally provides writing prompt or outline
 - [ ] Clicks "Generate" to create new writing using skill
-- [ ] Backend sends prompt + approved skill rules to LLM
+- [ ] Local Only generation may send raw text and source snippets only to Ollama
+- [ ] Hybrid and Cloud Allowed hosted-provider generation prompts contain only approved style rules, abstractions, summaries, and user-provided generation instructions
 - [ ] Generated text displayed in editor
 
 ### AC 6.2: Write Output Storage
-- [ ] Generated document saved to `data/profiles/{profile_id}/skills/{skill_id}/outputs/draft-{id}.md`
+- [ ] Generated document saved under `data/profiles/{profile_id}/skills/{skill_id}/outputs/` as `draft-{id}.md`
 - [ ] Metadata includes: skill version used, LLM model, generation date, prompt
 - [ ] User can save, edit, or discard output
 
@@ -212,18 +225,21 @@
 - [ ] User uploads or pastes existing text
 - [ ] Selects active skill
 - [ ] Clicks "Rewrite" to apply skill style to text
-- [ ] Backend sends text + skill rules to LLM
+- [ ] Local Only rewrite may send raw current input text and source snippets only to Ollama
+- [ ] Hybrid and Cloud Allowed hosted-provider rewrite prompts contain approved style rules, abstractions, summaries, and the user-provided current rewrite input only
+- [ ] Hosted-provider rewrite prompts do not include stored source document snippets
 - [ ] Rewritten text displayed with diff view
 
 ### AC 6.4: Rewrite Output Storage
-- [ ] Rewritten document saved to `data/profiles/{profile_id}/skills/{skill_id}/outputs/rewrite-{id}.md`
+- [ ] Rewritten document saved under `data/profiles/{profile_id}/skills/{skill_id}/outputs/` as `rewrite-{id}.md`
 - [ ] Original text included in metadata for reference
 - [ ] Diff preserved (original + rewritten)
 
 ### AC 6.5: LLM Prompt Engineering
 - [ ] System prompt explains skill context
 - [ ] Skill rules embedded in prompt as bullet points
-- [ ] Evidence snippets included for context
+- [ ] Evidence snippets are included only for Local Only prompts routed to Ollama
+- [ ] Hosted-provider prompts contain no raw source snippets and no raw uploaded document text
 - [ ] Temperature and other params configurable per skill
 
 ### AC 6.6: Output History
@@ -252,6 +268,7 @@
 - [ ] Test file operations with actual file system
 - [ ] Test LiteLLM mocking (don't call real API in tests)
 - [ ] Verify outputs match expected structure
+- [ ] Verify canonical storage paths for profile, documents, metadata, skills, versions, audit log, and outputs
 
 ### AC 7.4: Safety Validation
 - [ ] No hardcoded API keys in codebase
@@ -259,6 +276,9 @@
 - [ ] No cloud authentication endpoints
 - [ ] No third-party analytics
 - [ ] Local file paths use pathlib (cross-platform)
+- [ ] Path traversal attempts and malicious filenames are rejected
+- [ ] CORS rejects non-development origins during development
+- [ ] Logs do not contain API keys, raw document text, or full prompts
 
 ### AC 7.5: Documentation
 - [ ] README with setup instructions
@@ -274,12 +294,20 @@
 - [ ] Install script for macOS/Linux/Windows
 
 ### AC 7.7: PRD Compliance Check
-- [ ] Verify all features match initial PRD
+- [ ] PRD compliance checklist passes all named checks in this document
 - [ ] No SQL database added
 - [ ] No authentication/login required
 - [ ] All data stored locally
-- [ ] File structure matches design
-- [ ] Versioning and rollback working
+- [ ] File structure matches the canonical storage paths listed in TESTING_PLAN.md
+- [ ] Rollback creates a new immutable version with `status: "ROLLED_BACK"` and `rolled_back_from_version`
+- [ ] Local Only fail-closed routing test passes for analysis, write, and rewrite
+- [ ] Evidence snippet filtering test passes for Hybrid and Cloud Allowed
+
+### AC 7.8: Measurable Final Quality Gates
+- [ ] Security checklist has zero unresolved Critical or High findings
+- [ ] 10K-word analysis completes in < 60s with mocked LLM
+- [ ] React rule list renders 100 rules in < 1 second in component test environment
+- [ ] Final QA checklist records pass results for local-only mode, extraction, approval, generation, rewrite, audit log, and rollback
 
 ---
 

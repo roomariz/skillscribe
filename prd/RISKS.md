@@ -6,7 +6,7 @@
 **Risk:** PDF/DOCX extraction may fail or corrupt text, especially with complex formatting or non-English text.
 **Probability:** High | **Impact:** High
 **Mitigation:**
-- Use proven libraries (pypdf, python-docx, textract)
+- Use proven libraries (PyMuPDF, python-docx)
 - Implement fallback extraction methods
 - Store original documents for manual review
 - Preview extracted text before style analysis
@@ -28,7 +28,8 @@
 **Mitigation:**
 - Detect Ollama availability on startup
 - Provide clear error messages with setup instructions
-- Support fallback to cloud providers (Groq, Mistral, Gemini)
+- Support controlled hosted fallback only in Hybrid or Cloud Allowed modes
+- In Local Only, fail closed if Ollama is unavailable
 - Cache model responses where possible
 - Document system requirements
 
@@ -46,10 +47,11 @@
 **Risk:** LiteLLM or provider may log sensitive user document content.
 **Probability:** Medium | **Impact:** High
 **Mitigation:**
-- Only send style rules to LLM, never raw user documents
-- Redact sensitive content before LLM calls
+- Only send raw document text to local Ollama in Local Only mode
+- For hosted providers, send approved style rules, abstractions, and summaries; never raw snippets
+- Filter evidence snippets before hosted LLM calls
 - Document privacy implications in UI
-- Support offline Ollama-only mode
+- Support Local Only mode with fail-closed Ollama routing
 - Audit what is sent to each provider
 
 ### 6. Skill Namespace Collision
@@ -66,7 +68,7 @@
 **Mitigation:**
 - Validate provider config on startup
 - Implement retry logic with exponential backoff
-- Support manual provider fallback
+- Support manual provider fallback only when Hybrid or Cloud Allowed permits it
 - Log all LiteLLM calls for debugging
 - Version LiteLLM config separately
 
@@ -89,14 +91,16 @@
 - Add warnings when profile reaches 10k files
 - Plan Phase 2 migration path
 
-### 10. Audit Log Replay
-**Risk:** Skill rollback from audit log may fail if file structure changed incompatibly.
+### 10. Rollback Version Integrity
+**Risk:** Skill rollback may fail if the selected immutable version file is missing or structurally invalid.
 **Probability:** Low | **Impact:** High
 **Mitigation:**
-- Store complete skill snapshots (not just diffs)
-- Version audit log format
+- Store complete immutable skill version files, not just diffs
+- Audit logs record rollback events only and are not used to restore files
+- Rollback copies a selected immutable version into a new immutable version
+- New rollback version records `status = ROLLED_BACK`, `rolled_back_from_version`, `rollback_reason`, and rollback timestamp
 - Implement rollback validation before commit
-- Test rollback paths in CI/CD
+- Test copy-forward rollback paths in CI/CD
 
 ## Medium-Risk Areas
 
@@ -149,8 +153,8 @@
 |------|----------|-------|----------|
 | Document extraction | Implement fallback + preview | Sprint 2 | Week 2 |
 | Style analysis reliability | User approval UX + versioning | Sprint 3-4 | Week 3-4 |
-| Local LLM availability | Detect + fallback config UI | Sprint 5 | Week 5 |
+| Local LLM availability | Detect Ollama + fail closed in Local Only | Sprint 3-5 | Week 3-5 |
 | File corruption | Atomic writes + backup | Sprint 1 | Week 1 |
-| Privacy leakage | Redaction + audit logging | Sprint 4-5 | Week 4-5 |
+| Privacy leakage | Privacy routing before analysis + evidence filtering | Sprint 3-5 | Week 3-5 |
 | Concurrent writes | File locking | Sprint 1 | Week 1 |
 | Performance | Streaming + workers | Sprint 3-6 | Week 3+ |

@@ -99,7 +99,7 @@ Overview of profile, documents, skills, and recent outputs.
 ### Components
 - **Header:** Profile name, settings link
 - **Documents Panel:** List of uploaded documents, extract status, preview button
-- **Skills Panel:** List of approved skills, version, actions (Use, Edit, Delete)
+- **Skills Panel:** List of ACTIVE skills, version, actions (Use, Edit, Delete)
 - **Outputs Panel:** Recent generated/rewritten content with quick actions
 
 ---
@@ -278,7 +278,7 @@ Final confirmation and skill creation.
 │ data/profiles/muhammad/skills/               │
 │   legal-drafting/skill.json                  │
 │ data/profiles/muhammad/skills/               │
-│   legal-drafting/audit.jsonl                 │
+│   legal-drafting/audit/audit.jsonl           │
 │                                              │
 │ This skill will be:                          │
 │ ✓ Saved locally (no cloud upload)            │
@@ -425,9 +425,9 @@ Configure providers, privacy mode, storage location.
 │ LLM Providers                          │
 │                                        │
 │ Privacy Mode:                          │
-│ ☑ Ollama Only (Recommended)            │
-│ ☐ Ollama + Fallback                    │
-│ ☐ Cloud Only                           │
+│ ☑ Local Only (Ollama, fail closed)     │
+│ ☐ Hybrid (controlled fallback)         │
+│ ☐ Cloud Allowed                        │
 │                                        │
 │ Available Providers:                   │
 │ ✓ Ollama (Connected)                   │
@@ -436,12 +436,12 @@ Configure providers, privacy mode, storage location.
 │   [Test Connection]                    │
 │                                        │
 │ ☐ Groq                                 │
-│   API Key: ________________             │
-│   [Save] [Test Connection]             │
+│   API Key: configured in .env           │
+│   [Test Connection]                     │
 │                                        │
 │ ☐ Mistral                              │
-│   API Key: ________________             │
-│   [Save] [Test Connection]             │
+│   API Key: configured in .env           │
+│   [Test Connection]                     │
 │                                        │
 │ Storage                                │
 │ Location: ./data                       │
@@ -461,6 +461,14 @@ Configure providers, privacy mode, storage location.
 ---
 
 ## Component Specs
+
+### Privacy Mode Selector
+
+| Mode | UI label | Routing behavior |
+|------|----------|------------------|
+| `local_only` | Local Only | Ollama only; no cloud fallback |
+| `hybrid` | Hybrid | Ollama first; controlled hosted fallback after user selection |
+| `cloud_allowed` | Cloud Allowed | Selected cloud providers permitted through LiteLLM |
 
 ### Rule Card
 - **Title:** Rule category + confidence %

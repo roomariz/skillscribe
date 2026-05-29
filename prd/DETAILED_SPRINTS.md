@@ -112,11 +112,11 @@
    - [ ] Implement background extraction task (sync for Phase 1)
 
 4. **Document Extraction**
-   - [ ] Implement pdf extraction (pypdf library)
+   - [ ] Implement pdf extraction (PyMuPDF library)
    - [ ] Implement docx extraction (python-docx library)
    - [ ] Implement txt extraction (read as-is)
    - [ ] Save extracted text to `documents/extracted/{doc_id}.txt`
-   - [ ] Save metadata to `documents/metadata/{doc_id}.json`
+   - [ ] Save metadata to `data/profiles/{profile_id}/documents/metadata/{doc_id}.json`
    - [ ] Handle extraction errors gracefully
    - [ ] Support manual text upload as fallback
 
@@ -165,46 +165,55 @@
 
 ---
 
-## Sprint 3: Style Analysis & Rule Extraction
+## Sprint 3: Privacy Routing, Style Analysis & Rule Extraction
 
 **Duration:** Week 3 (Jun 8 - Jun 12)
 
-**Goal:** System analyzes uploaded documents, extracts style rules, shows rules to user with evidence.
+**Goal:** Privacy routing is enforced before any LLM analysis; system analyzes uploaded documents, extracts style rules, shows rules to user with evidence.
 
 ### Tasks
 
-1. **Style Analyzer Module**
-   - [ ] Implement `StyleAnalyzer.analyze_documents(doc_ids)` → returns list of rules
-   - [ ] Load extracted text from documents
-   - [ ] Call LLM (via LiteLLM) to identify writing patterns
-   - [ ] Extract rules with categories: tone, structure, vocabulary, formality, other
-   - [ ] Map each rule back to source snippets from documents
-   - [ ] Calculate confidence score (0-1) for each rule
+1. **Privacy & Provider Routing Foundation**
+   - [ ] Implement privacy modes before any style analysis call: Local Only, Hybrid, Cloud Allowed
+   - [ ] Local Only uses Ollama only and fails closed if Ollama is unavailable
+   - [ ] Hybrid uses Ollama first and may use controlled hosted fallback only after user selection
+   - [ ] Cloud Allowed permits selected cloud providers through LiteLLM
+   - [ ] Enforce all provider calls through LiteLLM only
+   - [ ] Add routing matrix tests for each privacy mode
 
 2. **LiteLLM Integration**
-   - [ ] Install litellm package
-   - [ ] Implement LiteLLMClient wrapper for completion calls
-   - [ ] Configure LiteLLM with Ollama, Groq, Mistral, OpenAI
+   - [ ] Install LiteLLM client dependency or configure OpenAI-compatible calls to LiteLLM proxy
+   - [ ] Implement LiteLLMClient wrapper for completion calls through LiteLLM only
+   - [ ] Configure LiteLLM with Ollama, OpenRouter, Gemini, Groq, Mistral, OpenAI as selected providers
    - [ ] Test Ollama connectivity (localhost:11434)
    - [ ] Implement retry logic (exponential backoff, 3 attempts max)
    - [ ] Timeout handling (abort after 60s)
 
-3. **Prompt Engineering**
+3. **Style Analyzer Module**
+   - [ ] Implement `StyleAnalyzer.analyze_documents(doc_ids)` → returns list of rules
+   - [ ] Load extracted text from documents
+   - [ ] Call LLM (via LiteLLM) to identify writing patterns only after privacy routing is enforced
+   - [ ] Extract rules with categories: tone, structure, vocabulary, formality, other
+   - [ ] Map each rule back to source snippets from documents
+   - [ ] Calculate confidence score (0-1) for each rule
+
+4. **Prompt Engineering**
    - [ ] System prompt explaining task: identify style patterns
-   - [ ] Embed extracted text in prompt
+   - [ ] In Local Only, extracted text may be embedded in the prompt sent to local Ollama
+   - [ ] In Hybrid or Cloud Allowed, raw document snippets must not be sent to hosted providers; use approved style rules, abstractions, and summaries only
    - [ ] Request JSON response with structure:
      ```json
      {"rules": [{"category": "...", "description": "...", "examples": {...}, "confidence": 0.9}]}
      ```
    - [ ] Test with sample documents, iterate on prompt
 
-4. **Rule Approval UI**
+5. **Rule Approval UI**
    - [ ] Analyze endpoint: `POST /api/profiles/{profile_id}/analyze-style`
    - [ ] Request: document_ids, skill_name
    - [ ] Response: 202 with analysis_id
    - [ ] `GET /api/profiles/{profile_id}/analyze-style/{analysis_id}` → returns rules
 
-5. **Frontend: Rule Review Page**
+6. **Frontend: Rule Review Page**
    - [ ] Show analysis progress during LLM call
    - [ ] Display all rules as cards
    - [ ] Each rule shows: category, description, examples, evidence snippets, confidence %
@@ -214,27 +223,28 @@
    - [ ] [Approve All] shortcut
    - [ ] [Next] button → go to Skill Approval
 
-6. **Edit Rule Modal**
+7. **Edit Rule Modal**
    - [ ] Edit description, examples, confidence threshold
    - [ ] Save changes (modify in-memory, not persisted yet)
    - [ ] Cancel (discard changes)
 
-7. **Custom Rule Modal**
+8. **Custom Rule Modal**
    - [ ] Form: category dropdown, description, examples, confidence
-   - [ ] Add rule to list
+   - [ ] Add rule to list with `source: "user_authored"` and `evidence: null`
    - [ ] Remove custom rule if desired
 
-8. **Processing Status Feedback**
+9. **Processing Status Feedback**
    - [ ] Show spinner during analysis
    - [ ] Update progress percentage
    - [ ] Estimated time remaining
    - [ ] [Cancel] button (stops analysis, discards results)
 
-9. **Testing**
+10. **Testing**
    - [ ] Backend: analyze documents, receive rules
    - [ ] Backend: rules include evidence snippets
    - [ ] Backend: confidence scores generated
-   - [ ] Backend: LiteLLM fallback works if Ollama unavailable
+   - [ ] Backend: Local Only fails closed if Ollama unavailable
+   - [ ] Backend: hosted provider prompts exclude raw document snippets
    - [ ] Frontend: rule cards display correctly
    - [ ] Frontend: approve/reject state persists
    - [ ] Frontend: custom rule addition works
@@ -245,6 +255,7 @@
 - [ ] User sees all rules with approve/reject options
 - [ ] User can edit rules and add custom rules
 - [ ] Analysis can be cancelled mid-process
+- [ ] Local Only never calls a cloud provider
 - [ ] Tests passing (80%+ coverage)
 
 ---
@@ -262,7 +273,7 @@
    - [ ] Request: approved_rules, rejected_rules, custom_rules
    - [ ] Create skill.json with approved rules
    - [ ] Save to `skills/{skill_id}/skill.json`
-   - [ ] Set status to "pending_approval"
+   - [ ] Set status to "PENDING"
    - [ ] Return skill object
 
 2. **Skill Creation Storage**
@@ -270,7 +281,7 @@
    - [ ] Implement SkillStore.get_skill()
    - [ ] Implement SkillStore.list_skills()
    - [ ] Implement SkillStore.approve_skill()
-   - [ ] Implement SkillStore.archive_skill()
+   - [ ] Implement SkillStore.mark_superseded()
    - [ ] Implement SkillStore.delete_skill() (soft delete)
 
 3. **Skill Approval UI**
@@ -299,13 +310,15 @@
    - [ ] `POST /api/profiles/{profile_id}/skills/{skill_id}/rollback`
    - [ ] Request: target_version, reason
    - [ ] Verify version file exists
-   - [ ] Copy version to active skill.json
-   - [ ] Increment version number (new version is copy of old)
-   - [ ] Log rollback event in audit.jsonl
+   - [ ] Copy selected version forward into a new immutable version
+   - [ ] Set new version status to "ROLLED_BACK"
+   - [ ] Record `rolled_back_from_version`
+   - [ ] Copy new version to active skill.json
+   - [ ] Log rollback event in `data/profiles/{profile_id}/skills/{skill_id}/audit/audit.jsonl`
 
 7. **Audit Logging**
    - [ ] Implement AuditLogger class (append-only JSONL)
-   - [ ] Create `audit.jsonl` for each skill
+   - [ ] Create `data/profiles/{profile_id}/skills/{skill_id}/audit/audit.jsonl` for each skill
    - [ ] Log events: skill_created, rule_approved, rule_rejected, skill_approved, skill_rollback, skill_deleted
    - [ ] Each log entry: timestamp, event_type, actor, details
    - [ ] Verify immutability (no edits after write)
@@ -343,11 +356,11 @@
 
 ---
 
-## Sprint 5: LiteLLM Integration & Provider Configuration
+## Sprint 5: Provider Configuration & Privacy Settings
 
 **Duration:** Week 5 (Jun 18 - Jun 22)
 
-**Goal:** Users can configure LLM providers (Ollama, Groq, Mistral, OpenAI), choose privacy mode.
+**Goal:** Users can configure selected LLM providers and choose the already-enforced privacy mode.
 
 ### Tasks
 
@@ -358,16 +371,16 @@
    - [ ] Log available providers to config
 
 2. **Privacy Modes**
-   - [ ] Mode 1: Ollama-only (no cloud calls)
-   - [ ] Mode 2: Ollama + Fallback (try cloud if local fails)
-   - [ ] Mode 3: Cloud-only (explicit opt-in)
+   - [ ] Mode 1: Local Only (Ollama only; fail closed)
+   - [ ] Mode 2: Hybrid (Ollama first; controlled hosted fallback after user selection)
+   - [ ] Mode 3: Cloud Allowed (selected cloud providers permitted)
    - [ ] Store mode in profile.json or config
    - [ ] Respect mode during all LLM calls
 
 3. **Content Redaction**
    - [ ] Implement Redactor class
-   - [ ] Before sending to cloud provider, redact user document content
-   - [ ] Send only style rules and prompts, not raw user text
+   - [ ] Before sending to cloud provider, remove raw document snippets
+   - [ ] Send only approved style rules, abstractions, summaries, and user prompts; not raw document text
    - [ ] For local Ollama, no redaction needed (data stays local)
    - [ ] Verify redaction in tests
 
@@ -375,41 +388,41 @@
    - [ ] `GET /api/config` → current config (providers, privacy mode)
    - [ ] `POST /api/config/update-privacy-mode` → change privacy mode
    - [ ] `POST /api/config/test-provider` → test connection to provider
-   - [ ] `POST /api/config/add-api-key` → add cloud provider key
+   - [ ] Document provider keys as `.env` configuration; do not add a credential-write API
 
 5. **Settings Page Frontend**
    - [ ] Show available providers with status (connected, available)
    - [ ] Display model names
    - [ ] Privacy mode selector: radio buttons or dropdown
-   - [ ] Add API keys for cloud providers
+   - [ ] Show cloud provider key status from `.env`; do not write credentials through the UI
    - [ ] [Test Connection] for each provider
    - [ ] Show test results (success or error message)
    - [ ] Save settings
 
 6. **Error Handling**
-   - [ ] If primary provider unavailable, try fallback
+   - [ ] If primary provider unavailable, apply privacy-mode routing rules
    - [ ] Log provider used for each operation
-   - [ ] Show user-friendly error: "Ollama not found, trying Groq..."
+   - [ ] Show user-friendly error in Local Only: "Ollama not found. Local Only mode prevents cloud fallback."
    - [ ] If all providers fail, show setup instructions
 
 7. **LiteLLM Configuration**
    - [ ] Ensure LiteLLM router is configured with all available providers
    - [ ] Respect privacy mode when routing
-   - [ ] Implement fallback chain: Ollama → Groq → Mistral → OpenAI (if keys configured)
+   - [ ] Implement fallback chain only for Hybrid and Cloud Allowed modes
    - [ ] Retry logic with exponential backoff
 
 8. **Testing**
    - [ ] Backend: Ollama detection works
-   - [ ] Backend: provider fallback works
+   - [ ] Backend: provider fallback works only when mode permits it
    - [ ] Backend: redaction preserves style intent
-   - [ ] Backend: privacy mode enforced (no cloud calls in Ollama-only mode)
+   - [ ] Backend: privacy mode enforced (no cloud calls in Local Only mode)
    - [ ] Frontend: settings page loads and saves correctly
    - [ ] Frontend: connection test shows proper feedback
 
 ### Acceptance Criteria
 - [ ] Ollama detected on startup
 - [ ] Privacy modes selectable by user
-- [ ] Provider fallback works
+- [ ] Provider fallback works only in Hybrid or Cloud Allowed
 - [ ] User content redacted before cloud provider call
 - [ ] Settings page functional
 - [ ] Tests passing (80%+ coverage)
@@ -430,7 +443,7 @@
    - [ ] Load skill from skill.json
    - [ ] Embed skill rules in LLM prompt
    - [ ] Call LLM
-   - [ ] Save output to `outputs/draft-{id}.md`
+   - [ ] Save output under `data/profiles/{profile_id}/skills/{skill_id}/outputs/` as `draft-{id}.md`
    - [ ] Return generation_id with status
 
 2. **Rewrite Workflow API**
@@ -438,12 +451,12 @@
    - [ ] Request: skill_id, original_text, instructions (optional), temperature
    - [ ] Load skill from skill.json
    - [ ] Call LLM with style rules + original text
-   - [ ] Save output to `outputs/rewrite-{id}.md`
+   - [ ] Save output under `data/profiles/{profile_id}/skills/{skill_id}/outputs/` as `rewrite-{id}.md`
    - [ ] Store original + rewritten for comparison
 
 3. **Prompt Engineering**
    - [ ] System prompt: "Rewrite the following using this style: [rules as bullets]"
-   - [ ] Include evidence snippets in prompt
+   - [ ] Include evidence snippets only for Local Only prompts; hosted provider prompts use abstractions and summaries
    - [ ] Temperature guidance: 0.5 for consistency, 0.7 for creativity
    - [ ] Max tokens limit (default 500 for write, 300 for rewrite)
 
@@ -587,7 +600,7 @@
 
 10. **Final QA**
     - [ ] Test on macOS, Linux, Windows
-    - [ ] Test with Ollama local, cloud fallback
+    - [ ] Test with Ollama local, Hybrid controlled fallback, and Cloud Allowed routing
     - [ ] Test profile creation, document upload, skill approval, write/rewrite
     - [ ] Test skill rollback, audit log
     - [ ] Test privacy modes
@@ -605,12 +618,12 @@
 ### Acceptance Criteria
 - [ ] All unit tests passing (80%+ coverage)
 - [ ] All integration tests passing
-- [ ] Security review complete, no issues
-- [ ] Performance acceptable
+- [ ] Security checklist has zero unresolved Critical or High findings
+- [ ] Performance thresholds pass: 10K-word analysis completes in < 60s with mocked LLM; React bundle remains < 500KB gzipped
 - [ ] Documentation complete
 - [ ] Packaging ready (requirements.txt, build scripts)
-- [ ] PRD compliance verified
-- [ ] Final QA sign-off
+- [ ] PRD compliance checklist passes all named checks
+- [ ] Final QA checklist has all required local-only, extraction, approval, generation, rewrite, audit, and rollback checks marked pass
 - [ ] Release tagged and announced
 
 ---

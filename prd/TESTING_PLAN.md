@@ -27,7 +27,12 @@ test_read_profile_json_corrupted_file()
 test_update_profile_json_preserves_other_fields()
 test_delete_profile_soft_delete()
 test_file_locking_prevents_concurrent_writes()
-test_rollback_from_corrupted_file()
+test_rollback_rejects_corrupted_version_file()
+test_storage_path_contract_profile()
+test_storage_path_contract_documents()
+test_storage_path_contract_skill_versions()
+test_storage_path_contract_audit_log()
+test_storage_path_contract_outputs()
 ```
 
 **Module:** `hermes_writer/storage/profile_store.py`
@@ -42,6 +47,7 @@ test_extract_preserves_line_breaks()
 test_extract_handles_unicode_characters()
 test_extract_handles_empty_document()
 test_extract_returns_metadata(filename, word_count, char_count)
+test_extract_pdf_metadata_method_is_pymupdf()
 test_extraction_timeout_after_30_seconds()
 ```
 
@@ -64,9 +70,9 @@ test_skill_rules_are_actionable()
 ```python
 test_litellm_call_with_ollama_provider()
 test_litellm_call_with_groq_provider()
-test_litellm_fallback_on_provider_failure()
+test_litellm_fallback_on_provider_failure_when_mode_permits()
 test_litellm_retry_with_exponential_backoff()
-test_litellm_redacts_user_content_before_send()
+test_litellm_filters_raw_snippets_before_cloud_send()
 test_litellm_error_handling()
 test_litellm_timeout_handling()
 ```
@@ -83,6 +89,11 @@ test_generate_content_skill_not_found()
 test_generate_content_missing_prompt()
 test_api_response_format_on_success()
 test_api_response_format_on_error()
+test_path_traversal_upload_rejected()
+test_malicious_filename_sanitized_or_rejected()
+test_cors_rejects_unapproved_origin()
+test_error_response_does_not_include_stack_trace()
+test_logs_do_not_include_secrets_or_raw_prompts()
 ```
 
 **Module:** `hermes_writer/api/routes.py`
@@ -91,8 +102,12 @@ test_api_response_format_on_error()
 ```python
 test_skill_version_increment()
 test_skill_version_saved_separately()
-test_rollback_restores_previous_version()
-test_rollback_creates_new_version()
+test_rollback_copies_selected_immutable_version_forward()
+test_rollback_creates_new_immutable_version()
+test_rollback_new_version_status_is_rolled_back()
+test_rollback_records_source_version()
+test_rollback_records_reason_and_timestamp()
+test_rollback_audit_log_records_event_only()
 test_audit_log_immutable()
 test_audit_log_event_format()
 test_audit_log_timestamp_precision()
@@ -105,9 +120,12 @@ test_soft_delete_adds_audit_entry()
 ```python
 test_redact_user_document_before_llm_call()
 test_redact_preserves_style_intent()
-test_privacy_mode_ollama_only()
+test_privacy_mode_local_only()
 test_privacy_mode_no_cloud_calls()
-test_privacy_mode_fallback_on_ollama_failure()
+test_privacy_mode_local_only_fails_closed_on_ollama_failure()
+test_privacy_mode_hybrid_allows_controlled_fallback()
+test_privacy_mode_cloud_allowed_permits_selected_providers()
+test_evidence_snippets_not_sent_to_cloud()
 test_user_data_never_logged()
 ```
 
@@ -244,7 +262,7 @@ test_upload_document_saves_to_correct_path()
 test_extract_document_reads_from_storage()
 test_analyze_style_loads_documents_from_storage()
 test_create_skill_saves_files_in_correct_structure()
-test_rollback_restores_files_from_audit_log()
+test_rollback_copies_forward_from_immutable_version_file()
 test_deletion_marks_file_but_preserves_backup()
 ```
 
@@ -261,8 +279,10 @@ test_get_profile_reflects_all_updates()
 #### 3. LiteLLM + Storage Workflow
 ```python
 test_generate_content_with_ollama_backend()
-test_generate_content_with_cloud_fallback()
+test_generate_content_with_cloud_fallback_when_mode_permits()
+test_generate_content_local_only_no_cloud_fallback()
 test_redaction_before_llm_call()
+test_evidence_filtering_before_cloud_llm_call()
 test_output_saved_to_storage_after_generation()
 ```
 
@@ -302,7 +322,7 @@ test('new user → create profile → upload document → approve skill → gene
 
 #### Path 2: Skill Rollback
 ```typescript
-test('create skill v1 → generate output → create v2 → rollback to v1 → verify output regenerated with v1')
+test('create skill v1 -> generate output -> create v2 -> rollback to v1 -> verify new immutable ROLLED_BACK version records source version, reason, and timestamp')
 ```
 
 #### Path 3: Multi-Document Analysis
@@ -411,6 +431,40 @@ MOCK_STYLE_RULES = {
 | `llm/` | 80% (with mocks) | pytest-cov |
 | `React components` | 80% | vitest + @testing-library/react |
 | `React hooks` | 85% | vitest + @testing-library/react |
+
+---
+
+## Contract Tests Required Before Phase 2
+
+### Storage Path Contracts
+
+Tests must assert the exact canonical paths:
+
+| Item | Expected path |
+|------|---------------|
+| Profile | `data/profiles/{profile_id}/profile.json` |
+| Original document | `data/profiles/{profile_id}/documents/original/{filename}` |
+| Extracted text | `data/profiles/{profile_id}/documents/extracted/{doc_id}.txt` |
+| Document metadata | `data/profiles/{profile_id}/documents/metadata/{doc_id}.json` |
+| Active skill | `data/profiles/{profile_id}/skills/{skill_id}/skill.json` |
+| Skill version | `data/profiles/{profile_id}/skills/{skill_id}/versions/v{N}.skill.json` |
+| Audit log | `data/profiles/{profile_id}/skills/{skill_id}/audit/audit.jsonl` |
+| Outputs | `data/profiles/{profile_id}/skills/{skill_id}/outputs/` |
+
+### Privacy Routing Contracts
+
+- Local Only analysis/write/rewrite must call only Ollama.
+- Local Only must fail closed when Ollama is unavailable.
+- Hybrid may use hosted fallback only after user selection.
+- Cloud Allowed may use selected hosted providers only.
+- Hosted provider prompts must exclude raw source snippets and raw uploaded document text.
+
+### Security Contracts
+
+- Uploads reject path traversal strings such as `../`.
+- Malicious filenames are sanitized or rejected before storage.
+- CORS rejects origins other than the approved development frontend origin.
+- Logs must not contain API keys, raw uploaded document text, or full prompts.
 
 ---
 

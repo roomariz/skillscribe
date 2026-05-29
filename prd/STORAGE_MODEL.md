@@ -36,18 +36,57 @@ hermes-writer/
 │   │   │   │   │   │   ├── v1.skill.json
 │   │   │   │   │   │   ├── v2.skill.json
 │   │   │   │   │   │   └── ...
-│   │   │   │   │   ├── audit.jsonl (immutable log)
+│   │   │   │   │   ├── audit/
+│   │   │   │   │   │   └── audit.jsonl (immutable log)
+│   │   │   │   │   ├── outputs/
+│   │   │   │   │   │   ├── draft-{id}.md
+│   │   │   │   │   │   ├── rewrite-{id}.md
+│   │   │   │   │   │   └── ...
 │   │   │   │   │   └── metadata.json (version history)
 │   │   │   │   └── ...
-│   │   │   └── outputs/
-│   │   │       ├── draft-{timestamp}-{id}.md
-│   │   │       ├── rewrite-{timestamp}-{id}.md
-│   │   │       └── ...
 │   │   └── ...
 │   └── .version (storage format version)
 └── logs/
     └── error.log (optional)
 ```
+
+---
+
+## Canonical Lifecycle
+
+```text
+PENDING
+  ↓
+APPROVED
+  ↓
+ACTIVE
+  ↓
+SUPERSEDED
+
+Rollback creates a new immutable version with status ROLLED_BACK.
+```
+
+| From | To | Trigger | Storage effect |
+|------|----|---------|----------------|
+| PENDING | APPROVED | User approves proposed skill rules | Version file is written |
+| APPROVED | ACTIVE | User activates a skill | `skill.json` points to active version |
+| ACTIVE | SUPERSEDED | Newer version becomes active | Previous active version is marked SUPERSEDED |
+| ACTIVE | ROLLED_BACK | User rolls back | Earlier version is copied forward as a new version |
+| SUPERSEDED | ROLLED_BACK | User restores an older version | Older version is copied forward as a new version |
+
+## Storage Path Consistency Table
+
+| Item | Canonical path |
+|------|----------------|
+| Profile | `data/profiles/{profile_id}/profile.json` |
+| Original document | `data/profiles/{profile_id}/documents/original/{filename}` |
+| Extracted text | `data/profiles/{profile_id}/documents/extracted/{doc_id}.txt` |
+| Document metadata | `data/profiles/{profile_id}/documents/metadata/{doc_id}.json` |
+| Active skill | `data/profiles/{profile_id}/skills/{skill_id}/skill.json` |
+| Skill version | `data/profiles/{profile_id}/skills/{skill_id}/versions/v{N}.skill.json` |
+| Version metadata | `data/profiles/{profile_id}/skills/{skill_id}/metadata.json` |
+| Audit log | `data/profiles/{profile_id}/skills/{skill_id}/audit/audit.jsonl` |
+| Outputs | `data/profiles/{profile_id}/skills/{skill_id}/outputs/` |
 
 ---
 
@@ -107,7 +146,7 @@ hermes-writer/
   "uploaded_at": "ISO 8601 timestamp",
   "extraction_started_at": "ISO 8601 timestamp",
   "extraction_completed_at": "ISO 8601 timestamp",
-  "extraction_method": "pypdf|python-docx|plain-text",
+  "extraction_method": "pymupdf|python-docx|plain-text",
   "extracted_text_location": "string (relative path)",
   "word_count": "integer",
   "character_count": "integer",
@@ -126,7 +165,7 @@ hermes-writer/
   "file_size_bytes": 2500,
   "uploaded_at": "2026-05-29T10:00:00Z",
   "extraction_completed_at": "2026-05-29T10:05:00Z",
-  "extraction_method": "pypdf",
+  "extraction_method": "pymupdf",
   "extracted_text_location": "extracted/doc-001.txt",
   "word_count": 250,
   "character_count": 1500,
@@ -167,7 +206,7 @@ Muhammad
   "name": "string",
   "description": "string (optional)",
   "version": "integer",
-  "status": "pending_approval|approved|archived",
+  "status": "PENDING|APPROVED|ACTIVE|SUPERSEDED|ROLLED_BACK",
   "created_at": "ISO 8601 timestamp",
   "approved_at": "ISO 8601 timestamp (optional)",
   "source_documents": ["doc_id", ...],
@@ -181,6 +220,8 @@ Muhammad
         "positive": "string",
         "negative": "string"
       },
+      "source": "document_derived|user_authored",
+      "evidence": "array or null",
       "source_snippets": ["string", ...],
       "confidence": "number (0-1)",
       "user_edited": "boolean",
@@ -205,7 +246,7 @@ Muhammad
   "name": "Muhammad Legal Drafting",
   "description": "Style for legal documents and formal correspondence",
   "version": 2,
-  "status": "approved",
+  "status": "ACTIVE",
   "created_at": "2026-05-29T10:10:00Z",
   "approved_at": "2026-05-29T10:15:00Z",
   "source_documents": ["doc-001", "doc-002"],
@@ -219,6 +260,11 @@ Muhammad
         "positive": "We appreciate your business and value our partnership.",
         "negative": "You must comply immediately."
       },
+      "source": "document_derived",
+      "evidence": [
+        "doc-001#snippet-001",
+        "doc-002#snippet-003"
+      ],
       "source_snippets": [
         "We appreciate your business and want to ensure...",
         "Thank you for your continued trust..."
@@ -249,6 +295,31 @@ Muhammad
 
 ---
 
+### User-Authored Custom Rule Example
+
+Custom rules are allowed only when their provenance is explicit. They are not treated as document-derived evidence.
+
+```json
+{
+  "rule_id": "rule-custom-001",
+  "category": "structure",
+  "title": "Always Include Headings",
+  "description": "Use clear headings for each major section.",
+  "examples": {
+    "positive": "## Background",
+    "negative": "A long unheaded paragraph"
+  },
+  "source": "user_authored",
+  "evidence": null,
+  "source_snippets": [],
+  "confidence": 1.0,
+  "user_edited": true,
+  "user_edit_note": "Added manually by user during skill review."
+}
+```
+
+---
+
 ### Version Metadata File
 
 **Path:** `data/profiles/{profile_id}/skills/{skill_id}/metadata.json`
@@ -262,9 +333,10 @@ Muhammad
     {
       "version": "integer",
       "created_at": "ISO 8601 timestamp",
-      "status": "approved|superseded|archived",
+      "status": "PENDING|APPROVED|ACTIVE|SUPERSEDED|ROLLED_BACK",
       "change_summary": "string",
-      "rules_count": "integer"
+      "rules_count": "integer",
+      "rolled_back_from_version": "integer (only for ROLLED_BACK versions)"
     }
   ]
 }
@@ -279,14 +351,14 @@ Muhammad
     {
       "version": 2,
       "created_at": "2026-05-29T10:15:00Z",
-      "status": "approved",
+      "status": "ACTIVE",
       "change_summary": "Added vocabulary rule for formal language",
       "rules_count": 15
     },
     {
       "version": 1,
       "created_at": "2026-05-29T10:10:00Z",
-      "status": "superseded",
+      "status": "SUPERSEDED",
       "change_summary": "Initial skill from documents",
       "rules_count": 14
     }
@@ -296,9 +368,26 @@ Muhammad
 
 ---
 
+### Rollback Lifecycle Example
+
+If version 2 is ACTIVE and the user rolls back to version 1, rollback creates version 3:
+
+```json
+{
+  "version": 3,
+  "status": "ROLLED_BACK",
+  "rolled_back_from_version": 1,
+  "change_summary": "Copy-forward rollback to version 1"
+}
+```
+
+The previous ACTIVE version becomes SUPERSEDED. Version 1 remains immutable.
+
+---
+
 ### Audit Log File (Immutable)
 
-**Path:** `data/profiles/{profile_id}/skills/{skill_id}/audit.jsonl`
+**Path:** `data/profiles/{profile_id}/skills/{skill_id}/audit/audit.jsonl`
 
 **Format:** JSON Lines (one JSON object per line, immutable append-only)
 
@@ -328,7 +417,7 @@ Muhammad
 
 ### Output File (Generated Content)
 
-**Path:** `data/profiles/{profile_id}/outputs/draft-{timestamp}-{id}.md` or `rewrite-{timestamp}-{id}.md`
+**Path:** `data/profiles/{profile_id}/skills/{skill_id}/outputs/draft-{id}.md` or `rewrite-{id}.md`
 
 **Format:** Markdown with YAML frontmatter
 
@@ -496,11 +585,11 @@ def rollback_safe(skill_id, target_version):
     # Load and verify
     skill = read_json_validated(version_file, SKILL_SCHEMA)
     
-    # Copy to active
+    # Copy forward into a new immutable version with status ROLLED_BACK
     shutil.copy2(version_file, "skill.json")
     
     # Log event
-    append_audit_entry(f"rollback to v{target_version}")
+    append_audit_entry(f"rollback copy-forward from v{target_version}")
 ```
 
 ---
@@ -513,13 +602,10 @@ def rollback_safe(skill_id, target_version):
 | Documents per profile | 1000 | Practical for individual |
 | Skills per profile | 100 | Each skill is small (< 100KB) |
 | Rules per skill | 50 | LLM-generated, reasonable limit |
-| Output files per profile | 10000 | Archived over time |
+| Output files per profile | 10000 | Pruned or compressed over time |
 | Total data per profile | 5GB | Typical disk space |
 
-**Migration Path for Phase 2:**
-- If scale needed, migrate to SQLite or PostgreSQL
-- Keep file structure for audit trails
-- Schema already designed for relational model
+**Phase 1 constraint:** Keep file-based storage. No SQL database is part of the MVP planning package.
 
 ---
 
@@ -562,7 +648,5 @@ tar xzf backup-muhammad-20260529.tar.gz
 ## Future Enhancements (Phase 2+)
 
 - **Encryption:** Encrypt sensitive data at rest (AES-256)
-- **Compression:** Compress archived outputs
+- **Compression:** Compress superseded outputs
 - **Deduplication:** Content-address-based dedup for large documents
-- **Replication:** Multi-device sync with conflict resolution
-- **Database Migration:** SQLite or PostgreSQL backend with file fallback

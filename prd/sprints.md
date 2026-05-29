@@ -5,16 +5,16 @@ Project scaffold, FastAPI, React/Vite, configuration, local file store.
 Profile management, document upload, PDF/DOCX/TXT extraction, extracted text preview.
 
 ### Sprint 3: 
-Style analyser, evidence-based rule extraction, proposed skill generation.
+Privacy routing foundation, style analyser, evidence-based rule extraction, proposed skill generation.
 
 ### Sprint 4: 
 Skill review, approval, active skill registry, versioning, rollback, audit log.
 
 ### Sprint 5: 
-LiteLLM integration, Ollama local route, provider configuration, privacy modes.
+Provider configuration, privacy settings UI, and LiteLLM routing verification.
 
 ### Sprint 6: 
-Write workflow and rewrite workflow using approved skills only.
+Write workflow and rewrite workflow using ACTIVE skills only.
 
 ### Sprint 7: 
 Safety validation, testing, packaging, documentation, final PRD compliance review.

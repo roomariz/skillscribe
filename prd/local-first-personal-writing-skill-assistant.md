@@ -42,19 +42,22 @@ hermes-writer/
     profiles/
       muhammad/
         profile.json
+        documents/
+          original/
+            sample-letter.pdf
+            sample-email.docx
+          extracted/
+            sample-letter.txt
+            sample-email.txt
+          metadata/
+            sample-letter.json
+            sample-email.json
         skills/
           legal-drafting/
             skill.json
             versions/
               v1.skill.json
               v2.skill.json
-            documents/
-              original/
-                sample-letter.pdf
-                sample-email.docx
-              extracted/
-                sample-letter.txt
-                sample-email.txt
             audit/
               audit.jsonl
             outputs/
@@ -196,17 +199,28 @@ Documents and prompts stay on device.
 
 Only local Ollama models are used.
 
+If Ollama is unavailable, generation and analysis fail closed. No cloud provider may be called in Local Only mode.
+
 ### Hybrid
 
 Style extraction may be local.
 
-Drafting may use hosted free models.
+Drafting may use hosted free models only through LiteLLM after user selection.
 
 ### Cloud Allowed
 
 User permits selected cloud providers through LiteLLM.
 
 Default should be Local Only.
+
+### Routing Matrix
+
+| Privacy Mode | Allowed Providers | Cloud Fallback | Raw Document Text |
+|--------------|-------------------|----------------|-------------------|
+| Local Only | Ollama only | Never | May be used locally only |
+| Hybrid | Ollama, selected hosted providers | Controlled fallback after user selection | Must not be sent to cloud |
+| Cloud Allowed | Selected hosted providers through LiteLLM | Permitted within selected providers | Must not be sent as raw snippets |
+ 
 
 ## 9. Main User Workflows
 
@@ -316,10 +330,20 @@ APPROVED
   ↓
 ACTIVE
   ↓
-SUPERSEDED / ROLLED_BACK
+SUPERSEDED
+
+Rollback creates a new immutable version with status ROLLED_BACK.
 ```
 
 No skill becomes active automatically.
+
+| From | To | Trigger |
+|------|----|---------|
+| PENDING | APPROVED | User approves proposed skill rules |
+| APPROVED | ACTIVE | User activates an approved skill version |
+| ACTIVE | SUPERSEDED | A newer approved version becomes active |
+| ACTIVE | ROLLED_BACK | User rolls back by copy-forwarding an earlier version |
+| SUPERSEDED | ROLLED_BACK | User rolls back by copy-forwarding a superseded version |
 
 ## 13. Versioning
 
@@ -332,15 +356,58 @@ versions/
   v3.skill.json
 ```
 
-The active skill points to the latest approved version.
+The active skill points to the latest approved version unless a rollback has copy-forwarded an earlier version.
 
-Rollback simply changes:
+Rollback uses copy-forward versioning. It creates a new immutable version from the selected source version, marks that new version as ROLLED_BACK, records `rolled_back_from_version`, and then makes the new version active.
 
 ```json
 {
-  "active_version": 1
+  "version": 3,
+  "status": "ROLLED_BACK",
+  "rolled_back_from_version": 1
 }
 ```
+
+## 13.1 PRD Amendments for Phase 2 Planning
+
+These amendments clarify the MVP without expanding scope.
+
+### Canonical Storage Paths
+
+| Item | Canonical path |
+|------|----------------|
+| Profile | `data/profiles/{profile_id}/profile.json` |
+| Original documents | `data/profiles/{profile_id}/documents/original/{filename}` |
+| Extracted text | `data/profiles/{profile_id}/documents/extracted/{doc_id}.txt` |
+| Document metadata | `data/profiles/{profile_id}/documents/metadata/{doc_id}.json` |
+| Skill file | `data/profiles/{profile_id}/skills/{skill_id}/skill.json` |
+| Skill versions | `data/profiles/{profile_id}/skills/{skill_id}/versions/v{N}.skill.json` |
+| Audit log | `data/profiles/{profile_id}/skills/{skill_id}/audit/audit.jsonl` |
+| Outputs | `data/profiles/{profile_id}/skills/{skill_id}/outputs/` |
+
+### Rule Provenance
+
+Document-derived rules must include evidence from source documents.
+
+User-authored custom rules are allowed only when clearly marked:
+
+```json
+{
+  "source": "user_authored",
+  "evidence": null
+}
+```
+
+Document-derived rules use:
+
+```json
+{
+  "source": "document_derived",
+  "evidence": ["source snippet reference"]
+}
+```
+
+Cloud modes must not send raw document snippets to hosted providers. They may send approved style rules, abstractions, and summaries.
 
 ## 14. Safety Rules
 
@@ -351,7 +418,7 @@ Hermes must not:
 * send documents to cloud models unless user permits it
 * treat uploaded documents as legal or factual knowledge
 * invent user preferences not found in the uploaded samples
-* create a style rule without evidence from the documents
+* create a document-derived style rule without evidence from the documents
 
 ## 15. MVP Scope
 
