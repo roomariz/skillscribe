@@ -61,3 +61,9 @@ class PrivacyModeUpdateRequest(BaseModel):
 
 class ProviderTestRequest(BaseModel):
     provider: str
+
+
+class AnalyzeStyleRequest(BaseModel):
+    document_ids: list[str]
+    skill_name: str
+    provider: str | None = None

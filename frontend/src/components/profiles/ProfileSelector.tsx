@@ -11,6 +11,7 @@ import {
   updateExtractedText,
   uploadDocument,
 } from '../../api/client';
+import { AnalysisPanel } from '../analysis/AnalysisPanel';
 
 export function ProfileSelector() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -240,6 +241,10 @@ export function ProfileSelector() {
                 </div>
               </div>
             ) : null}
+            <AnalysisPanel
+              documents={selectedProfile.documents}
+              profileId={selectedProfile.profile_id}
+            />
 
             <div className="document-grid">
               <div className="document-list">

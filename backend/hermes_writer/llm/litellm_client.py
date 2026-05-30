@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import json
+from typing import Any
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
@@ -49,6 +50,40 @@ class LiteLLMClient:
         model = self._first_provider_model(payload, normalized)
         return ProviderConnection(provider=normalized, connected=model is not None, model=model)
 
+    def chat_completion(
+        self,
+        *,
+        provider: str,
+        messages: list[dict[str, str]],
+        temperature: float = 0.1,
+        max_tokens: int = 1200,
+    ) -> str:
+        normalized = self.validate_provider(provider)
+        payload = {
+            "model": normalized,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        request = Request(
+            f"{self.base_url}/v1/chat/completions",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=self.timeout_seconds) as response:
+                response_payload = json.loads(response.read().decode("utf-8") or "{}")
+        except (OSError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+            raise ApiError(
+                "PROVIDER_UNAVAILABLE",
+                "LiteLLM provider request failed.",
+                status_code=503,
+                details={"provider": normalized},
+                recovery_hint="Verify LiteLLM is running and the provider is configured.",
+            ) from exc
+        return self._message_content(response_payload)
+
     @staticmethod
     def _first_provider_model(payload: dict[str, object], provider: str) -> str | None:
         models = payload.get("data")
@@ -61,3 +96,16 @@ class LiteLLMClient:
             if model_id == provider or model_id.startswith(f"{provider}/"):
                 return model_id
         return None
+
+    @staticmethod
+    def _message_content(payload: dict[str, Any]) -> str:
+        choices = payload.get("choices")
+        if not isinstance(choices, list) or not choices:
+            raise ApiError("ANALYSIS_FAILED", "LiteLLM response did not include choices.", status_code=502)
+        first = choices[0]
+        if not isinstance(first, dict):
+            raise ApiError("ANALYSIS_FAILED", "LiteLLM response choice is invalid.", status_code=502)
+        message = first.get("message")
+        if not isinstance(message, dict) or not isinstance(message.get("content"), str):
+            raise ApiError("ANALYSIS_FAILED", "LiteLLM response message is invalid.", status_code=502)
+        return message["content"]

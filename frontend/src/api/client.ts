@@ -73,6 +73,32 @@ export type ProviderTestResult = {
   model?: string | null;
 };
 
+export type StyleRule = {
+  rule_id: string;
+  category: string;
+  title: string;
+  description: string;
+  examples: {
+    positive: string;
+    negative: string;
+  };
+  source: 'document_derived';
+  evidence: string[];
+  source_snippets: string[];
+  confidence: number;
+};
+
+export type StyleAnalysis = {
+  analysis_id: string;
+  status: string;
+  progress: number;
+  skill_name: string;
+  provider: string;
+  privacy_mode: PrivacyMode;
+  document_ids: string[];
+  rules: StyleRule[];
+};
+
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
 async function parseEnvelope<T>(response: Response, fallbackMessage: string): Promise<ApiEnvelope<T>> {
@@ -118,6 +144,24 @@ export async function testProvider(provider: string) {
     body: JSON.stringify({ provider }),
   });
   return parseEnvelope<ProviderTestResult>(response, 'Unable to test provider');
+}
+
+export async function startStyleAnalysis(profileId: string, payload: {
+  document_ids: string[];
+  skill_name: string;
+  provider?: string;
+}) {
+  const response = await fetch(`${API_BASE_URL}/api/profiles/${profileId}/analyze-style`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return parseEnvelope<StyleAnalysis>(response, 'Unable to start style analysis');
+}
+
+export async function getStyleAnalysis(profileId: string, analysisId: string) {
+  const response = await fetch(`${API_BASE_URL}/api/profiles/${profileId}/analyze-style/${analysisId}`);
+  return parseEnvelope<StyleAnalysis>(response, 'Unable to load style analysis');
 }
 
 export async function listProfiles() {

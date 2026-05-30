@@ -3,8 +3,10 @@ import {
   createProfile,
   getConfig,
   getStatus,
+  getStyleAnalysis,
   listProfiles,
   previewDocument,
+  startStyleAnalysis,
   testProvider,
   updateExtractedText,
   updatePrivacyMode,
@@ -116,6 +118,41 @@ describe('getStatus', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/api/config/test-provider'),
       expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('starts and loads style analysis', async () => {
+    const analysisResponse = {
+      success: true,
+      data: {
+        analysis_id: 'analysis-001',
+        status: 'completed',
+        progress: 1,
+        skill_name: 'Legal',
+        provider: 'ollama',
+        privacy_mode: 'local_only',
+        document_ids: ['doc-001'],
+        rules: [],
+      },
+      timestamp: '2026-05-30T00:00:00Z',
+    };
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify(analysisResponse)))
+      .mockResolvedValueOnce(new Response(JSON.stringify(analysisResponse)));
+
+    await startStyleAnalysis('muhammad', {
+      document_ids: ['doc-001'],
+      skill_name: 'Legal',
+    });
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining('/api/profiles/muhammad/analyze-style'),
+      expect.objectContaining({ method: 'POST' }),
+    );
+
+    await getStyleAnalysis('muhammad', 'analysis-001');
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining('/api/profiles/muhammad/analyze-style/analysis-001'),
     );
   });
 
