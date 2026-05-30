@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 from hermes_writer.api.errors import ApiError
+from hermes_writer.config.privacy_config import PrivacyMode, validate_privacy_mode
 
 
 @dataclass(frozen=True)
@@ -35,9 +36,15 @@ class Settings:
             missing.append("HERMES_WRITER_LOG_LEVEL")
         if not self.privacy_mode:
             missing.append("HERMES_WRITER_PRIVACY_MODE")
-        if self.privacy_mode not in {"local_only", "hybrid", "cloud_allowed"}:
+        try:
+            validate_privacy_mode(self.privacy_mode)
+        except ApiError:
             missing.append("HERMES_WRITER_PRIVACY_MODE")
         return missing
+
+    @property
+    def default_privacy_mode(self) -> PrivacyMode:
+        return validate_privacy_mode(self.privacy_mode)
 
     def validate_for_startup(self) -> None:
         missing = sorted(set(self.validate()))

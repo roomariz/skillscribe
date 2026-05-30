@@ -51,6 +51,28 @@ export type UploadProgress = {
   percentage: number;
 };
 
+export type PrivacyMode = 'local_only' | 'hybrid' | 'cloud_allowed';
+
+export type ProviderStatus = {
+  name: string;
+  available: boolean;
+  configured: boolean;
+  model?: string | null;
+};
+
+export type AppConfig = {
+  providers: ProviderStatus[];
+  privacy_mode: PrivacyMode;
+  max_upload_size_mb: number;
+  storage_path: string;
+};
+
+export type ProviderTestResult = {
+  provider: string;
+  connected: boolean;
+  model?: string | null;
+};
+
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
 async function parseEnvelope<T>(response: Response, fallbackMessage: string): Promise<ApiEnvelope<T>> {
@@ -73,6 +95,29 @@ export async function getStatus() {
     database_type: 'file-based';
     privacy_mode: 'local_only' | 'hybrid' | 'cloud_allowed';
   }>(response, 'Unable to load API status');
+}
+
+export async function getConfig() {
+  const response = await fetch(`${API_BASE_URL}/api/config`);
+  return parseEnvelope<AppConfig>(response, 'Unable to load settings');
+}
+
+export async function updatePrivacyMode(privacyMode: PrivacyMode) {
+  const response = await fetch(`${API_BASE_URL}/api/config/update-privacy-mode`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ privacy_mode: privacyMode }),
+  });
+  return parseEnvelope<AppConfig>(response, 'Unable to update privacy mode');
+}
+
+export async function testProvider(provider: string) {
+  const response = await fetch(`${API_BASE_URL}/api/config/test-provider`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider }),
+  });
+  return parseEnvelope<ProviderTestResult>(response, 'Unable to test provider');
 }
 
 export async function listProfiles() {

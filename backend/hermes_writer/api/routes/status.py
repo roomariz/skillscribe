@@ -17,6 +17,7 @@ async def status(request: Request) -> SuccessEnvelope:
     profile_store = request.app.state.profile_store
     document_store = request.app.state.document_store
     settings = request.app.state.settings
+    privacy_config = request.app.state.privacy_config
     return SuccessEnvelope(
         data={
             "storage_path": settings.storage_root.as_posix(),
@@ -25,6 +26,6 @@ async def status(request: Request) -> SuccessEnvelope:
             "profiles_count": profile_store.count_profiles(),
             "documents_count": document_store.count_documents(),
             "skills_count": 0,
-            "privacy_mode": settings.privacy_mode,
+            "privacy_mode": privacy_config.get_mode().value,
         }
     )

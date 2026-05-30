@@ -11,9 +11,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from hermes_writer.api.errors import ApiError
 from hermes_writer.api.routes.documents import router as documents_router
+from hermes_writer.api.routes.config import router as config_router
 from hermes_writer.api.routes.health import router as health_router
 from hermes_writer.api.routes.profiles import router as profiles_router
 from hermes_writer.api.routes.status import router as status_router
+from hermes_writer.config.privacy_config import PrivacyConfigStore
 from hermes_writer.api.schemas import ErrorEnvelope
 from hermes_writer.config.settings import Settings
 from hermes_writer.storage.document_store import DocumentStore
@@ -41,10 +43,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         store.initialize()
         profile_store = ProfileStore(app_settings.storage_root)
         document_store = DocumentStore(app_settings.storage_root)
+        privacy_config = PrivacyConfigStore(
+            app_settings.storage_root,
+            default_mode=app_settings.default_privacy_mode,
+        )
         app.state.settings = app_settings
         app.state.file_store = store
         app.state.profile_store = profile_store
         app.state.document_store = document_store
+        app.state.privacy_config = privacy_config
         yield
 
     app = FastAPI(title="Hermes Writer API", version="1.0.0", lifespan=lifespan)
@@ -115,6 +122,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(health_router)
     app.include_router(status_router)
+    app.include_router(config_router)
     app.include_router(profiles_router)
     app.include_router(documents_router)
     return app

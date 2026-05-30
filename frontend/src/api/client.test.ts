@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createProfile,
+  getConfig,
   getStatus,
   listProfiles,
   previewDocument,
+  testProvider,
   updateExtractedText,
+  updatePrivacyMode,
   uploadDocument,
 } from './client';
 
@@ -51,6 +54,69 @@ describe('getStatus', () => {
     await expect(listProfiles()).resolves.toMatchObject({
       data: [{ profile_id: 'muhammad' }],
     });
+  });
+
+  it('loads and updates config', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              providers: [{ name: 'ollama', available: true, configured: true }],
+              privacy_mode: 'local_only',
+              max_upload_size_mb: 50,
+              storage_path: './data',
+            },
+            timestamp: '2026-05-30T00:00:00Z',
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              providers: [{ name: 'ollama', available: true, configured: true }],
+              privacy_mode: 'hybrid',
+              max_upload_size_mb: 50,
+              storage_path: './data',
+            },
+            timestamp: '2026-05-30T00:00:00Z',
+          }),
+        ),
+      );
+
+    await expect(getConfig()).resolves.toMatchObject({
+      data: { privacy_mode: 'local_only' },
+    });
+    await updatePrivacyMode('hybrid');
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining('/api/config/update-privacy-mode'),
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('tests provider connections', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { provider: 'ollama', connected: true, model: 'ollama/mistral' },
+          timestamp: '2026-05-30T00:00:00Z',
+        }),
+      ),
+    );
+
+    await expect(testProvider('ollama')).resolves.toMatchObject({
+      data: { connected: true },
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/config/test-provider'),
+      expect.objectContaining({ method: 'POST' }),
+    );
   });
 
   it('creates profiles with JSON payloads', async () => {

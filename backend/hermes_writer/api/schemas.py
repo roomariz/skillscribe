@@ -53,3 +53,11 @@ class ProfileUpdateRequest(BaseModel):
 
 class ExtractedTextUpdateRequest(BaseModel):
     extracted_text: str
+
+
+class PrivacyModeUpdateRequest(BaseModel):
+    privacy_mode: str
+
+
+class ProviderTestRequest(BaseModel):
+    provider: str
