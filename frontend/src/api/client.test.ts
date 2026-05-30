@@ -1,9 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getStatus } from './client';
+import {
+  createProfile,
+  getStatus,
+  listProfiles,
+  previewDocument,
+  updateExtractedText,
+  uploadDocument,
+} from './client';
 
 describe('getStatus', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('loads the API status envelope', async () => {
@@ -28,5 +36,111 @@ describe('getStatus', () => {
 
     await expect(getStatus()).rejects.toThrow('Unable to load API status');
   });
-});
 
+  it('loads profiles', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: [{ profile_id: 'muhammad', display_name: 'Muhammad' }],
+          timestamp: '2026-05-30T00:00:00Z',
+        }),
+      ),
+    );
+
+    await expect(listProfiles()).resolves.toMatchObject({
+      data: [{ profile_id: 'muhammad' }],
+    });
+  });
+
+  it('creates profiles with JSON payloads', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { profile_id: 'muhammad', display_name: 'Muhammad' },
+          timestamp: '2026-05-30T00:00:00Z',
+        }),
+      ),
+    );
+
+    await createProfile({ display_name: 'Muhammad' });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/profiles'),
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('loads previews and updates extracted text', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: { doc_id: 'doc-001', preview: 'text' },
+            timestamp: '2026-05-30T00:00:00Z',
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: { doc_id: 'doc-001', extraction_method: 'manual' },
+            timestamp: '2026-05-30T00:00:00Z',
+          }),
+        ),
+      );
+
+    await expect(previewDocument('muhammad', 'doc-001')).resolves.toMatchObject({
+      data: { preview: 'text' },
+    });
+    await updateExtractedText('muhammad', 'doc-001', 'new text');
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining('/api/profiles/muhammad/documents/doc-001/extracted-text'),
+      expect.objectContaining({ method: 'PUT' }),
+    );
+  });
+
+  it('uploads documents with actual XMLHttpRequest progress', async () => {
+    const progress = vi.fn();
+    class MockXMLHttpRequest {
+      status = 201;
+      responseText = JSON.stringify({
+        success: true,
+        data: {
+          doc_id: 'doc-001',
+          profile_id: 'muhammad',
+          original_filename: 'sample.txt',
+          file_type: 'txt',
+          file_size_bytes: 4,
+          uploaded_at: '2026-05-30T00:00:00Z',
+          extraction_method: 'plain-text',
+          word_count: 1,
+          character_count: 4,
+          status: 'extracted',
+        },
+        timestamp: '2026-05-30T00:00:00Z',
+      });
+      upload = { onprogress: (_event: ProgressEvent) => undefined };
+      onload = () => undefined;
+      onerror = () => undefined;
+      open = vi.fn();
+      send = vi.fn(() => {
+        this.upload.onprogress({ lengthComputable: true, loaded: 2, total: 4 } as ProgressEvent);
+        this.onload();
+      });
+    }
+    vi.stubGlobal('XMLHttpRequest', MockXMLHttpRequest);
+
+    await expect(uploadDocument('muhammad', new File(['text'], 'sample.txt'), progress)).resolves.toMatchObject({
+      data: { doc_id: 'doc-001' },
+    });
+
+    expect(progress).toHaveBeenCalledWith({ stage: 'Uploading', percentage: 23 });
+    expect(progress).toHaveBeenCalledWith({ stage: 'Complete', percentage: 100 });
+  });
+});

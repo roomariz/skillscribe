@@ -41,6 +41,14 @@ class PathRegistry:
             f"{self._segment(doc_id)}.json",
         )
 
+    def document_audit_log(self, profile_id: str) -> Path:
+        return self._safe_join(
+            "profiles",
+            self._segment(profile_id),
+            "documents",
+            "audit.jsonl",
+        )
+
     def active_skill(self, profile_id: str, skill_id: str) -> Path:
         return self._safe_join(
             "profiles",
@@ -112,4 +120,3 @@ class PathRegistry:
         if "/" in value or "\\" in value or ".." in value or not _FILENAME_RE.fullmatch(value):
             raise ApiError("INVALID_FILENAME", "Filename is not safe for local storage.")
         return value
-

@@ -13,16 +13,147 @@ export type ApiErrorEnvelope = {
   recovery_hint?: string;
 };
 
+export type Profile = {
+  profile_id: string;
+  display_name: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+  default_skill: string | null;
+  document_count: number;
+  skill_count: number;
+};
+
+export type DocumentMetadata = {
+  doc_id: string;
+  profile_id: string;
+  original_filename: string;
+  file_type: 'pdf' | 'docx' | 'txt';
+  file_size_bytes: number;
+  uploaded_at: string;
+  extraction_method: string;
+  word_count: number;
+  character_count: number;
+  status: string;
+  extracted_text?: string;
+};
+
+export type ExtractedTextPreview = {
+  doc_id: string;
+  filename: string;
+  preview: string;
+  character_count: number;
+  truncated: boolean;
+};
+
+export type UploadProgress = {
+  stage: 'Uploading' | 'Extracting text' | 'Saving metadata' | 'Complete';
+  percentage: number;
+};
+
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+
+async function parseEnvelope<T>(response: Response, fallbackMessage: string): Promise<ApiEnvelope<T>> {
+  if (!response.ok) {
+    let message = fallbackMessage;
+    try {
+      const error = (await response.json()) as ApiErrorEnvelope;
+      message = error.message || fallbackMessage;
+    } catch {
+      // Keep the caller-facing fallback for non-JSON failures.
+    }
+    throw new Error(message);
+  }
+  return (await response.json()) as ApiEnvelope<T>;
+}
 
 export async function getStatus() {
   const response = await fetch(`${API_BASE_URL}/api/status`);
-  if (!response.ok) {
-    throw new Error('Unable to load API status');
-  }
-  return (await response.json()) as ApiEnvelope<{
+  return parseEnvelope<{
     database_type: 'file-based';
     privacy_mode: 'local_only' | 'hybrid' | 'cloud_allowed';
-  }>;
+  }>(response, 'Unable to load API status');
 }
 
+export async function listProfiles() {
+  const response = await fetch(`${API_BASE_URL}/api/profiles`);
+  return parseEnvelope<Profile[]>(response, 'Unable to load profiles');
+}
+
+export async function createProfile(payload: {
+  profile_id?: string;
+  display_name: string;
+  description?: string;
+}) {
+  const response = await fetch(`${API_BASE_URL}/api/profiles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return parseEnvelope<Profile>(response, 'Unable to create profile');
+}
+
+export async function getProfile(profileId: string) {
+  const response = await fetch(`${API_BASE_URL}/api/profiles/${profileId}`);
+  return parseEnvelope<Profile & { documents: DocumentMetadata[] }>(
+    response,
+    'Unable to load profile',
+  );
+}
+
+export async function uploadDocument(
+  profileId: string,
+  file: File,
+  onProgress?: (progress: UploadProgress) => void,
+) {
+  const body = new FormData();
+  body.append('file', file);
+
+  return new Promise<ApiEnvelope<DocumentMetadata>>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open('POST', `${API_BASE_URL}/api/profiles/${profileId}/documents/upload`);
+
+    request.upload.onprogress = (event) => {
+      if (!event.lengthComputable) {
+        return;
+      }
+      const uploadPercent = Math.min(45, Math.round((event.loaded / event.total) * 45));
+      onProgress?.({ stage: 'Uploading', percentage: uploadPercent });
+    };
+
+    request.onload = () => {
+      try {
+        const bodyText = request.responseText || '{}';
+        const parsed = JSON.parse(bodyText) as ApiEnvelope<DocumentMetadata> | ApiErrorEnvelope;
+        if (request.status < 200 || request.status >= 300 || parsed.success === false) {
+          reject(new Error((parsed as ApiErrorEnvelope).message || 'Unable to upload document'));
+          return;
+        }
+        onProgress?.({ stage: 'Complete', percentage: 100 });
+        resolve(parsed as ApiEnvelope<DocumentMetadata>);
+      } catch {
+        reject(new Error('Unable to upload document'));
+      }
+    };
+
+    request.onerror = () => reject(new Error('Unable to upload document'));
+    request.send(body);
+  });
+}
+
+export async function previewDocument(profileId: string, docId: string) {
+  const response = await fetch(`${API_BASE_URL}/api/profiles/${profileId}/documents/${docId}/preview`);
+  return parseEnvelope<ExtractedTextPreview>(response, 'Unable to preview document');
+}
+
+export async function updateExtractedText(profileId: string, docId: string, extractedText: string) {
+  const response = await fetch(
+    `${API_BASE_URL}/api/profiles/${profileId}/documents/${docId}/extracted-text`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ extracted_text: extractedText }),
+    },
+  );
+  return parseEnvelope<DocumentMetadata>(response, 'Unable to update extracted text');
+}

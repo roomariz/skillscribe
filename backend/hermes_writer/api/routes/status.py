@@ -14,16 +14,17 @@ async def version() -> SuccessEnvelope:
 @router.get("/status")
 async def status(request: Request) -> SuccessEnvelope:
     store = request.app.state.file_store
+    profile_store = request.app.state.profile_store
+    document_store = request.app.state.document_store
     settings = request.app.state.settings
     return SuccessEnvelope(
         data={
             "storage_path": settings.storage_root.as_posix(),
             "storage_available": store.is_available(),
             "database_type": "file-based",
-            "profiles_count": store.count_profiles(),
-            "documents_count": 0,
+            "profiles_count": profile_store.count_profiles(),
+            "documents_count": document_store.count_documents(),
             "skills_count": 0,
             "privacy_mode": settings.privacy_mode,
         }
     )
-

@@ -37,3 +37,19 @@ class ErrorEnvelope(BaseModel):
             details=details,
             recovery_hint=recovery_hint,
         )
+
+
+class ProfileCreateRequest(BaseModel):
+    profile_id: str | None = None
+    display_name: str
+    description: str = ""
+
+
+class ProfileUpdateRequest(BaseModel):
+    display_name: str | None = None
+    description: str | None = None
+    default_skill: str | None = None
+
+
+class ExtractedTextUpdateRequest(BaseModel):
+    extracted_text: str

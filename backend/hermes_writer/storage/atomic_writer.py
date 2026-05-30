@@ -4,6 +4,8 @@ from pathlib import Path
 import shutil
 from typing import Any
 
+from hermes_writer.storage.file_lock import file_lock
+
 
 def backup_path_for(path: Path) -> Path:
     return path.with_name(f"{path.name}.bak")
@@ -42,10 +44,22 @@ def recover_json_from_backup(path: Path) -> bool:
 def write_text_atomic(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = path.with_name(f".{path.name}.tmp")
-    temp_path.write_text(content, encoding="utf-8")
+    with temp_path.open("w", encoding="utf-8", newline="") as handle:
+        handle.write(content)
     backup_existing_file(path)
     os.replace(temp_path, path)
 
 
 def write_json_atomic(path: Path, data: dict[str, Any]) -> None:
     write_text_atomic(path, json.dumps(data, indent=2, sort_keys=True) + "\n")
+
+
+def append_jsonl_atomic(path: Path, event: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    line = json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n"
+    lock_path = path.with_name(f".{path.name}.lock")
+    with file_lock(lock_path):
+        with path.open("a", encoding="utf-8", newline="\n") as handle:
+            handle.write(line)
+            handle.flush()
+            os.fsync(handle.fileno())

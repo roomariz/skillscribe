@@ -1,6 +1,6 @@
 :root {
-  color: #1c2430;
   background: #f6f7f9;
+  color: #1c2430;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   line-height: 1.5;
@@ -8,6 +8,22 @@
 
 body {
   margin: 0;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled,
+input:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .app-shell {
@@ -19,17 +35,19 @@ body {
   background: #ffffff;
   border-bottom: 1px solid #d9dee6;
   display: flex;
+  gap: 20px;
   justify-content: space-between;
   padding: 20px 28px;
 }
 
 .app-header h1,
-.home-panel h2 {
+.profile-workspace h2,
+.profile-workspace h3 {
   margin: 0;
 }
 
 .app-header p,
-.home-panel p {
+.profile-workspace p {
   color: #5d6978;
   margin: 4px 0 0;
 }
@@ -39,20 +57,209 @@ body {
   border: 1px solid #b8d9ca;
   border-radius: 999px;
   color: #195c43;
+  flex: 0 0 auto;
   font-size: 0.875rem;
   padding: 6px 10px;
 }
 
 .app-main {
   margin: 0 auto;
-  max-width: 960px;
+  max-width: 1180px;
   padding: 32px 24px;
 }
 
-.home-panel {
+.profile-workspace {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(260px, 320px) 1fr;
+  position: relative;
+}
+
+.profile-sidebar,
+.profile-dashboard,
+.preview-panel,
+.document-list {
   background: #ffffff;
   border: 1px solid #d9dee6;
   border-radius: 8px;
-  padding: 24px;
 }
 
+.profile-sidebar,
+.profile-dashboard {
+  min-height: 520px;
+  padding: 20px;
+}
+
+.section-heading,
+.dashboard-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.section-heading span {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.profile-list {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 20px;
+}
+
+.profile-row,
+.document-row {
+  background: #f9fafb;
+  border: 1px solid #dde3eb;
+  border-radius: 8px;
+  color: inherit;
+  display: grid;
+  gap: 2px;
+  padding: 12px;
+  text-align: left;
+}
+
+.profile-row:hover,
+.document-row:hover {
+  border-color: #7b92ad;
+}
+
+.profile-row span,
+.document-row span {
+  color: #5d6978;
+  font-size: 0.875rem;
+}
+
+.profile-form {
+  border-top: 1px solid #e4e8ee;
+  display: grid;
+  gap: 8px;
+  padding-top: 18px;
+}
+
+.profile-form label {
+  color: #374151;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.profile-form input,
+.profile-form textarea,
+.preview-panel textarea {
+  border: 1px solid #cfd6e1;
+  border-radius: 8px;
+  color: #1c2430;
+  padding: 10px;
+}
+
+.profile-form button,
+.preview-panel button,
+.upload-control {
+  background: #1e5f74;
+  border: 1px solid #174b5c;
+  border-radius: 8px;
+  color: #ffffff;
+  font-weight: 700;
+  padding: 10px 12px;
+}
+
+.dashboard-header {
+  border-bottom: 1px solid #e4e8ee;
+  padding-bottom: 18px;
+}
+
+.upload-progress {
+  border-bottom: 1px solid #e4e8ee;
+  display: grid;
+  gap: 8px;
+  padding: 14px 0;
+}
+
+.progress-copy {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.progress-copy span {
+  color: #5d6978;
+  font-size: 0.875rem;
+}
+
+.progress-track {
+  background: #e8edf3;
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.progress-track span {
+  background: #1e5f74;
+  display: block;
+  height: 100%;
+  transition: width 160ms ease;
+}
+
+.upload-control {
+  display: inline-flex;
+  overflow: hidden;
+  position: relative;
+}
+
+.upload-control input {
+  inset: 0;
+  opacity: 0;
+  position: absolute;
+}
+
+.document-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(220px, 300px) 1fr;
+  margin-top: 18px;
+}
+
+.document-list,
+.preview-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.preview-panel textarea {
+  min-height: 260px;
+  resize: vertical;
+  width: 100%;
+}
+
+.empty-dashboard {
+  align-content: center;
+  display: grid;
+  min-height: 420px;
+  text-align: center;
+}
+
+.status-message {
+  background: #fff8e7;
+  border: 1px solid #ead49a;
+  border-radius: 8px;
+  bottom: -58px;
+  color: #654c13;
+  left: 0;
+  padding: 10px 12px;
+  position: absolute;
+}
+
+@media (max-width: 860px) {
+  .profile-workspace,
+  .document-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
