@@ -67,3 +67,10 @@ class AnalyzeStyleRequest(BaseModel):
     document_ids: list[str]
     skill_name: str
     provider: str | None = None
+
+
+class RuleReviewRequest(BaseModel):
+    approved_rules: list[dict[str, Any]] = Field(default_factory=list)
+    rejected_rules: list[dict[str, Any]] = Field(default_factory=list)
+    edited_rules: list[dict[str, Any]] = Field(default_factory=list)
+    custom_rules: list[dict[str, Any]] = Field(default_factory=list)

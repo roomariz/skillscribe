@@ -1,13 +1,15 @@
 from fastapi import APIRouter, Request
 
+from hermes_writer.analysis.rule_review import RuleReviewValidator
 from hermes_writer.analysis.style_analyzer import AnalysisRequest, StyleAnalyzer
 from hermes_writer.api.errors import ApiError
-from hermes_writer.api.schemas import AnalyzeStyleRequest, SuccessEnvelope
+from hermes_writer.api.schemas import AnalyzeStyleRequest, RuleReviewRequest, SuccessEnvelope
 from hermes_writer.config.privacy_config import PrivacyConfigStore, PrivacyMode
 from hermes_writer.llm.litellm_client import LiteLLMClient
 from hermes_writer.llm.provider_detection import detect_providers
 
 router = APIRouter(prefix="/api/profiles/{profile_id}/analyze-style")
+review_router = APIRouter(prefix="/api/profiles/{profile_id}/analyses")
 
 
 @router.post("", status_code=202)
@@ -48,6 +50,24 @@ async def get_analysis(profile_id: str, analysis_id: str, request: Request) -> S
     if not analysis or analysis.get("profile_id") not in {None, profile_id}:
         raise ApiError("ANALYSIS_NOT_FOUND", "Analysis does not exist.", status_code=404)
     return SuccessEnvelope(data=analysis)
+
+
+@review_router.post("/{analysis_id}/review")
+async def review_analysis_rules(
+    profile_id: str,
+    analysis_id: str,
+    payload: RuleReviewRequest,
+    request: Request,
+) -> SuccessEnvelope:
+    analysis = request.app.state.analysis_results.get(analysis_id)
+    if not analysis or analysis.get("profile_id") not in {None, profile_id}:
+        raise ApiError("ANALYSIS_NOT_FOUND", "Analysis does not exist.", status_code=404)
+    review = RuleReviewValidator().validate(
+        analysis=analysis,
+        review=payload.model_dump(),
+    )
+    analysis["review"] = review
+    return SuccessEnvelope(data=review["summary"])
 
 
 def _default_provider(privacy_mode: PrivacyMode, statuses: dict[str, object]) -> str:

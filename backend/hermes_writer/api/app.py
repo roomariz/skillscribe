@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from hermes_writer.api.errors import ApiError
-from hermes_writer.api.routes.analyses import router as analyses_router
+from hermes_writer.api.routes.analyses import review_router, router as analyses_router
 from hermes_writer.api.routes.documents import router as documents_router
 from hermes_writer.api.routes.config import router as config_router
 from hermes_writer.api.routes.health import router as health_router
@@ -128,4 +128,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(profiles_router)
     app.include_router(documents_router)
     app.include_router(analyses_router)
+    app.include_router(review_router)
     return app

@@ -88,6 +88,21 @@ export type StyleRule = {
   confidence: number;
 };
 
+export type ReviewRule = StyleRule | {
+  rule_id: string;
+  category: string;
+  title: string;
+  description: string;
+  examples: {
+    positive: string;
+    negative: string;
+  };
+  source: 'user_authored';
+  evidence: null;
+  source_snippets: string[];
+  confidence: number;
+};
+
 export type StyleAnalysis = {
   analysis_id: string;
   status: string;
@@ -97,6 +112,15 @@ export type StyleAnalysis = {
   privacy_mode: PrivacyMode;
   document_ids: string[];
   rules: StyleRule[];
+};
+
+export type RuleReviewSummary = {
+  analysis_id: string;
+  approved_count: number;
+  rejected_count: number;
+  edited_count: number;
+  custom_count: number;
+  ready_for_skill_creation: boolean;
 };
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
@@ -162,6 +186,20 @@ export async function startStyleAnalysis(profileId: string, payload: {
 export async function getStyleAnalysis(profileId: string, analysisId: string) {
   const response = await fetch(`${API_BASE_URL}/api/profiles/${profileId}/analyze-style/${analysisId}`);
   return parseEnvelope<StyleAnalysis>(response, 'Unable to load style analysis');
+}
+
+export async function completeRuleReview(profileId: string, analysisId: string, payload: {
+  approved_rules: ReviewRule[];
+  rejected_rules: ReviewRule[];
+  edited_rules: ReviewRule[];
+  custom_rules: ReviewRule[];
+}) {
+  const response = await fetch(`${API_BASE_URL}/api/profiles/${profileId}/analyses/${analysisId}/review`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return parseEnvelope<RuleReviewSummary>(response, 'Unable to complete rule review');
 }
 
 export async function listProfiles() {

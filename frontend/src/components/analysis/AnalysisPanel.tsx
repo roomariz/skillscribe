@@ -84,6 +84,12 @@ export function AnalysisPanel({ profileId, documents }: AnalysisPanelProps) {
           <p>
             {analysis.status} via {analysis.provider}
           </p>
+          <a
+            className="review-link"
+            href={`/profiles/${profileId}/analyses/${analysis.analysis_id}/review`}
+          >
+            Review Rules
+          </a>
           {analysis.rules.map((rule) => (
             <article className="rule-preview" key={rule.rule_id}>
               <div className="section-heading">
