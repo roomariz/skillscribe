@@ -67,6 +67,19 @@ async def review_analysis_rules(
         review=payload.model_dump(),
     )
     analysis["review"] = review
+    if (
+        review["summary"]["approved_count"]
+        + review["summary"]["edited_count"]
+        + review["summary"]["custom_count"]
+        > 0
+    ):
+        skill = request.app.state.skill_store.create_from_review(
+            profile_id=profile_id,
+            analysis=analysis,
+            review=review,
+        )
+        review["summary"]["skill_id"] = skill["metadata"]["skill_id"]
+        review["summary"]["lifecycle_status"] = skill["metadata"]["lifecycle_status"]
     return SuccessEnvelope(data=review["summary"])
 
 

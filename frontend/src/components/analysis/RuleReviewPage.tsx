@@ -207,7 +207,19 @@ export function RuleReviewPage({ profileId, analysisId }: RuleReviewPageProps) {
           <button onClick={() => void completeReview()} type="button">
             Complete Review
           </button>
-          {summary ? <p>Review complete: {summary.approved_count} approved</p> : null}
+          {summary ? (
+            <p>
+              Review complete: {summary.approved_count} approved
+              {summary.skill_id ? (
+                <>
+                  {' '}
+                  <a href={`/profiles/${profileId}/skills/${summary.skill_id}/approval`}>
+                    Open pending skill
+                  </a>
+                </>
+              ) : null}
+            </p>
+          ) : null}
           {message ? <p>{message}</p> : null}
         </aside>
       </div>

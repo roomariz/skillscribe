@@ -15,6 +15,7 @@ from hermes_writer.api.routes.documents import router as documents_router
 from hermes_writer.api.routes.config import router as config_router
 from hermes_writer.api.routes.health import router as health_router
 from hermes_writer.api.routes.profiles import router as profiles_router
+from hermes_writer.api.routes.skills import router as skills_router
 from hermes_writer.api.routes.status import router as status_router
 from hermes_writer.config.privacy_config import PrivacyConfigStore
 from hermes_writer.api.schemas import ErrorEnvelope
@@ -22,6 +23,7 @@ from hermes_writer.config.settings import Settings
 from hermes_writer.storage.document_store import DocumentStore
 from hermes_writer.storage.file_store import LocalFileStore
 from hermes_writer.storage.profile_store import ProfileStore
+from hermes_writer.storage.skill_store import SkillStore
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -44,6 +46,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         store.initialize()
         profile_store = ProfileStore(app_settings.storage_root)
         document_store = DocumentStore(app_settings.storage_root)
+        skill_store = SkillStore(app_settings.storage_root)
         privacy_config = PrivacyConfigStore(
             app_settings.storage_root,
             default_mode=app_settings.default_privacy_mode,
@@ -52,6 +55,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.file_store = store
         app.state.profile_store = profile_store
         app.state.document_store = document_store
+        app.state.skill_store = skill_store
         app.state.privacy_config = privacy_config
         app.state.analysis_results = {}
         yield
@@ -129,4 +133,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(documents_router)
     app.include_router(analyses_router)
     app.include_router(review_router)
+    app.include_router(skills_router)
     return app

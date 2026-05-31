@@ -24,7 +24,7 @@ async def list_profiles(request: Request) -> SuccessEnvelope:
 async def get_profile(request: Request, profile_id: str) -> SuccessEnvelope:
     profile = request.app.state.profile_store.get_profile(profile_id)
     profile["documents"] = request.app.state.document_store.list_documents(profile_id)
-    profile["skills"] = []
+    profile["skills"] = request.app.state.skill_store.list_skills(profile_id)
     return SuccessEnvelope(data=profile)
 
 

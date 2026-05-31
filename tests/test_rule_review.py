@@ -6,6 +6,7 @@ def _analysis(rule: dict | None = None) -> dict:
     return {
         "analysis_id": "analysis-001",
         "profile_id": "muhammad",
+        "skill_name": "Legal Drafting",
         "status": "completed",
         "rules": [base_rule],
     }
@@ -44,6 +45,10 @@ def _custom_rule(**overrides) -> dict:
 
 
 def _install_analysis(client, analysis: dict | None = None) -> None:
+    client.post(
+        "/api/profiles",
+        json={"profile_id": "muhammad", "display_name": "Muhammad"},
+    )
     client.app.state.analysis_results["analysis-001"] = analysis or _analysis()
 
 
@@ -62,7 +67,11 @@ def test_approve_rules_succeeds(client, tmp_path):
 
     assert response.status_code == 200
     assert response.json()["data"]["approved_count"] == 1
-    assert list((tmp_path / "data/profiles").glob("*/skills/**")) == []
+    assert (tmp_path / "data/profiles/muhammad/skills/legal-drafting/skill.json").exists()
+    assert (tmp_path / "data/profiles/muhammad/skills/legal-drafting/metadata.json").exists()
+    assert (
+        tmp_path / "data/profiles/muhammad/skills/legal-drafting/versions/v1.skill.json"
+    ).exists()
 
 
 def test_reject_rules_succeeds(client):
@@ -198,4 +207,6 @@ def test_review_summary_counts_correct(client):
         "edited_count": 1,
         "custom_count": 1,
         "ready_for_skill_creation": True,
+        "skill_id": "legal-drafting",
+        "lifecycle_status": "PENDING",
     }

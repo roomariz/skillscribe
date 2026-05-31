@@ -214,15 +214,18 @@ export function ProfileSelector() {
                 <h2>{selectedProfile.display_name}</h2>
                 <p>Created {createdLabel}</p>
               </div>
-              <label className="upload-control">
-                <span>{isBusy ? 'Working...' : 'Upload Document'}</span>
-                <input
-                  accept=".pdf,.docx,.txt"
-                  disabled={isBusy}
-                  onChange={(event) => void handleUpload(event)}
-                  type="file"
-                />
-              </label>
+              <div className="dashboard-actions">
+                <a href={`/profiles/${selectedProfile.profile_id}/skills`}>Skills</a>
+                <label className="upload-control">
+                  <span>{isBusy ? 'Working...' : 'Upload Document'}</span>
+                  <input
+                    accept=".pdf,.docx,.txt"
+                    disabled={isBusy}
+                    onChange={(event) => void handleUpload(event)}
+                    type="file"
+                  />
+                </label>
+              </div>
             </div>
             {uploadProgress ? (
               <div className="upload-progress" aria-label="Upload progress">

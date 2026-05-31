@@ -24,6 +24,56 @@ export type Profile = {
   skill_count: number;
 };
 
+export type SkillLifecycleStatus = 'PENDING' | 'APPROVED' | 'ACTIVE';
+
+export type SkillMetadata = {
+  skill_id: string;
+  profile_id: string;
+  name: string;
+  lifecycle_status: SkillLifecycleStatus;
+  current_version: number;
+  default: boolean;
+  created_at: string;
+  updated_at: string;
+  versions: Array<{
+    version: number;
+    status: SkillLifecycleStatus;
+    created_at: string;
+    approved_at: string | null;
+    activated_at: string | null;
+    change_summary: string;
+    path: string;
+  }>;
+};
+
+export type Skill = {
+  skill_id: string;
+  profile_id: string;
+  name: string;
+  lifecycle_status: SkillLifecycleStatus;
+  version: number;
+  rules: Array<{
+    rule_id: string;
+    category: string;
+    title: string;
+    description: string;
+    examples: {
+      positive: string;
+      negative: string;
+    };
+    confidence: number;
+    source: 'document_derived' | 'user_authored';
+    evidence: string[] | null;
+  }>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SkillDetail = {
+  metadata: SkillMetadata;
+  skill: Skill;
+};
+
 export type DocumentMetadata = {
   doc_id: string;
   profile_id: string;
@@ -121,6 +171,8 @@ export type RuleReviewSummary = {
   edited_count: number;
   custom_count: number;
   ready_for_skill_creation: boolean;
+  skill_id?: string;
+  lifecycle_status?: SkillLifecycleStatus;
 };
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
@@ -200,6 +252,37 @@ export async function completeRuleReview(profileId: string, analysisId: string, 
     body: JSON.stringify(payload),
   });
   return parseEnvelope<RuleReviewSummary>(response, 'Unable to complete rule review');
+}
+
+export async function listSkills(profileId: string) {
+  const response = await fetch(`${API_BASE_URL}/api/profiles/${profileId}/skills`);
+  return parseEnvelope<SkillMetadata[]>(response, 'Unable to load skills');
+}
+
+export async function getSkill(profileId: string, skillId: string) {
+  const response = await fetch(`${API_BASE_URL}/api/profiles/${profileId}/skills/${skillId}`);
+  return parseEnvelope<SkillDetail>(response, 'Unable to load skill');
+}
+
+export async function approveSkill(profileId: string, skillId: string) {
+  const response = await fetch(`${API_BASE_URL}/api/profiles/${profileId}/skills/${skillId}/approve`, {
+    method: 'POST',
+  });
+  return parseEnvelope<SkillDetail>(response, 'Unable to approve skill');
+}
+
+export async function activateSkill(profileId: string, skillId: string) {
+  const response = await fetch(`${API_BASE_URL}/api/profiles/${profileId}/skills/${skillId}/activate`, {
+    method: 'POST',
+  });
+  return parseEnvelope<SkillDetail>(response, 'Unable to activate skill');
+}
+
+export async function setDefaultSkill(profileId: string, skillId: string) {
+  const response = await fetch(`${API_BASE_URL}/api/profiles/${profileId}/skills/${skillId}/set-default`, {
+    method: 'POST',
+  });
+  return parseEnvelope<SkillDetail>(response, 'Unable to set default skill');
 }
 
 export async function listProfiles() {

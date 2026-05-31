@@ -261,7 +261,8 @@ input:disabled {
   font-weight: 700;
 }
 
-.rule-review-page {
+.rule-review-page,
+.skills-page {
   background: #ffffff;
   border: 1px solid #d9dee6;
   border-radius: 8px;
@@ -281,6 +282,7 @@ input:disabled {
 }
 
 .review-rule-card,
+.skill-card,
 .review-summary-panel,
 .rule-modal {
   border: 1px solid #dde3eb;
@@ -288,7 +290,8 @@ input:disabled {
   padding: 14px;
 }
 
-.review-rule-card {
+.review-rule-card,
+.skill-card {
   background: #f9fafb;
 }
 
@@ -308,6 +311,31 @@ input:disabled {
   font-size: 0.82rem;
   font-weight: 700;
   padding: 4px 8px;
+}
+
+.lifecycle-badge {
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 4px 8px;
+}
+
+.lifecycle-pending {
+  background: #fff8e7;
+  border: 1px solid #ead49a;
+  color: #654c13;
+}
+
+.lifecycle-approved {
+  background: #eef6ff;
+  border: 1px solid #bfd7f0;
+  color: #244c75;
+}
+
+.lifecycle-active {
+  background: #e8f3ee;
+  border: 1px solid #b8d9ca;
+  color: #195c43;
 }
 
 .review-rule-card h3,
@@ -365,6 +393,63 @@ input:disabled {
   align-self: start;
   display: grid;
   gap: 10px;
+}
+
+.skill-list {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  padding-top: 18px;
+}
+
+.skill-card h3,
+.skill-card p {
+  margin: 8px 0;
+}
+
+.skill-action-bar,
+.dashboard-actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.skill-action-bar {
+  border-bottom: 1px solid #e4e8ee;
+  padding: 18px 0;
+}
+
+.skill-action-bar button,
+.dashboard-actions a {
+  background: #ffffff;
+  border: 1px solid #9aa8b8;
+  border-radius: 8px;
+  color: #1c2430;
+  font-weight: 700;
+  padding: 8px 10px;
+  text-decoration: none;
+}
+
+.skill-json-preview {
+  border-bottom: 1px solid #e4e8ee;
+  display: grid;
+  gap: 8px;
+  padding: 18px 0;
+}
+
+.skill-json-preview h3 {
+  margin: 0;
+}
+
+.skill-json-preview pre {
+  background: #101820;
+  border-radius: 8px;
+  color: #f6f7f9;
+  margin: 0;
+  max-height: 360px;
+  overflow: auto;
+  padding: 14px;
+  white-space: pre-wrap;
 }
 
 .modal-backdrop {
@@ -593,7 +678,9 @@ input:disabled {
 
   .dashboard-header,
   .settings-header,
-  .provider-row {
+  .provider-row,
+  .dashboard-actions,
+  .skill-action-bar {
     align-items: flex-start;
     flex-direction: column;
   }
